@@ -25,7 +25,7 @@ A mobile-friendly campus emergency reporting prototype with role-based dashboard
 ## Run locally
 
 1. Download or clone this repository.
-2. Open `index.html` in a modern web browser.
+2. Open C:/Users/yashwanth/Documents/Codex/2026-08-22/github-plugin-github-openai-curated-remote-2/outputs/campus-emergency-app/index.html in a modern web browser.
 3. Choose a role and sign in using a demo account.
 
 No installation, backend, or API key is required.
