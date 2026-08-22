@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Campus emergency response prototype with student, volunteer, and doctor workflows." />
+    <title>Campus Emergency Response</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="site-header"><div class="container"><p class="eyebrow">Campus safety service</p><h1>Campus Emergency Response</h1><p class="intro">Report an emergency, coordinate volunteer support, and track medical-case resolution. For immediate danger, contact local emergency services first.</p></div></header>
+    <main class="container">
+      <section class="control-panel" aria-labelledby="role-heading">
+        <div><p class="eyebrow">Demo workspace</p><h2 id="role-heading">Choose a role</h2></div>
+        <div class="role-controls"><span class="current-role">Current role: <strong id="current-role">Student</strong></span><div class="role-switcher" role="tablist" aria-label="Demo role switcher"><button class="role-button active" type="button" role="tab" aria-selected="true" data-role="Student">Student</button><button class="role-button" type="button" role="tab" aria-selected="false" data-role="Volunteer">Helper / Volunteer</button><button class="role-button" type="button" role="tab" aria-selected="false" data-role="Doctor">Doctor</button></div></div>
+        <p class="security-note">Prototype only: role switching is for demonstration and is not secure. A real deployment needs backend authentication, server-side authorization, secure storage, audit logs, and privacy controls.</p>
+      </section>
+      <p id="app-status" class="status-message" role="status" aria-live="polite"></p>
+      <section id="student-form-section" class="panel form-panel" aria-labelledby="report-heading">
+        <div class="section-heading"><div><p class="eyebrow">Student dashboard</p><h2 id="report-heading">Report an emergency</h2></div><p class="required-note"><span aria-hidden="true">*</span> Required fields</p></div>
+        <form id="emergency-form" novalidate>
+          <div class="field-group"><label for="emergency-type">Emergency type <span aria-hidden="true">*</span></label><select id="emergency-type" aria-describedby="type-error" aria-invalid="false"><option value="">Select emergency type</option><option>Medical</option><option>Fire</option><option>Security</option><option>Accident</option><option>Other</option></select><p id="type-error" class="field-error" aria-live="polite"></p></div>
+          <div class="field-group"><div class="label-row"><label for="description">What is the emergency? <span aria-hidden="true">*</span></label><span id="character-count" class="character-count" aria-live="polite">0 / 300</span></div><textarea id="description" rows="5" maxlength="300" aria-describedby="description-help description-error character-count" aria-invalid="false" placeholder="Briefly describe the emergency and any immediate concern."></textarea><p id="description-help" class="field-help">Use 5–300 characters. Do not include sensitive personal details.</p><p id="description-error" class="field-error" aria-live="polite"></p></div>
+          <div class="field-group"><label for="location">Campus location <span aria-hidden="true">*</span></label><select id="location" aria-describedby="location-error" aria-invalid="false"><option value="">Select campus location</option><option>Main Gate</option><option>Administration Building</option><option>Library</option><option>Science Block</option><option>Engineering Block</option><option>Student Hostel</option><option>Cafeteria</option><option>Sports Ground</option><option>Parking Area</option><option>Other</option></select><p id="location-error" class="field-error" aria-live="polite"></p></div>
+          <fieldset class="field-group severity-fieldset" aria-describedby="severity-error"><legend>Severity level <span aria-hidden="true">*</span></legend><label class="severity-option"><input type="radio" name="severity" value="Low" /> <span><strong>Low severity</strong><small>Check and assist the student on-site.</small></span></label><label class="severity-option"><input type="radio" name="severity" value="Medium" /> <span><strong>Medium severity</strong><small>Volunteers escort the student to the medical block.</small></span></label><label class="severity-option"><input type="radio" name="severity" value="High" /> <span><strong>High severity</strong><small>Volunteers coordinate directly with doctors or bring medical help immediately.</small></span></label></fieldset><p id="severity-error" class="field-error" aria-live="polite"></p>
+          <button id="submit-button" class="primary-button" type="submit">Report Emergency</button>
+        </form>
+      </section>
+      <section class="dashboard" aria-labelledby="dashboard-heading"><div class="section-heading dashboard-heading"><div><p id="dashboard-eyebrow" class="eyebrow">Student dashboard</p><h2 id="dashboard-heading">My submitted reports</h2></div><p id="report-count" class="report-count">0 reports</p></div><div id="summary-cards" class="summary-grid" aria-label="Report summary"></div><div id="workflow-note" class="workflow-note"></div><div id="filters" class="filters" aria-label="Report filters"></div><div id="reports-list" class="reports-list" aria-live="polite"></div></section>
+    </main>
+    <script src="script.js"></script>
+  </body>
+</html>
+
