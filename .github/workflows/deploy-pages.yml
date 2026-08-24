@@ -23,6 +23,13 @@ jobs:
           node-version: 20
       - run: npm install
       - run: npm run build
+        env:
+          VITE_FIREBASE_API_KEY: AIzaSyD7NMp66LLaZYi_5uqbrbU-SFCJRCRyTmY
+          VITE_FIREBASE_AUTH_DOMAIN: emergency-app-f2850.firebaseapp.com
+          VITE_FIREBASE_PROJECT_ID: emergency-app-f2850
+          VITE_FIREBASE_STORAGE_BUCKET: emergency-app-f2850.firebasestorage.app
+          VITE_FIREBASE_MESSAGING_SENDER_ID: "206775317622"
+          VITE_FIREBASE_APP_ID: "1:206775317622:web:8b051ba2dfe92858ca1b57"
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
