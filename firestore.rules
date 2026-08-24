@@ -1,2 +1,72 @@
-rules_version = '2'; service cloud.firestore { match /databases/{database}/documents { match /users/{uid} { allow read: if request.auth != null && request.auth.uid == uid; allow create: if request.auth != null && request.auth.uid == uid && request.resource.data.role == null; allow update: if request.auth != null && request.auth.uid == uid && request.resource.data.uid == resource.data.uid && request.resource.data.createdAt == resource.data.createdAt && (request.resource.data.role == null || request.resource.data.role in ['student','volunteer','doctor']); } } }
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwnUser(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function hasRole(role) {
+      return signedIn()
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == role;
+    }
+
+    function validRole(role) {
+      return role == null || role in ['student', 'volunteer', 'doctor'];
+    }
+
+    match /users/{uid} {
+      allow read: if isOwnUser(uid);
+
+      allow create: if isOwnUser(uid)
+        && request.resource.data.uid == uid
+        && validRole(request.resource.data.role);
+
+      allow update: if isOwnUser(uid)
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.createdAt == resource.data.createdAt
+        && validRole(request.resource.data.role)
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['email', 'displayName', 'photoURL', 'role', 'updatedAt']);
+
+      allow delete: if false;
+    }
+
+    match /reports/{reportId} {
+      allow create: if hasRole('student')
+        && request.resource.data.id == reportId
+        && request.resource.data.submittedBy == request.auth.uid
+        && request.resource.data.reportStatus == 'Pending'
+        && request.resource.data.helperStatus == 'Not yet'
+        && request.resource.data.severity in ['Low', 'Medium', 'High']
+        && request.resource.data.emergencyType in ['Medical', 'Fire', 'Security', 'Accident', 'Other'];
+
+      allow read: if signedIn()
+        && (resource.data.submittedBy == request.auth.uid
+          || hasRole('volunteer')
+          || hasRole('doctor'));
+
+      allow update: if signedIn() && (
+        (hasRole('volunteer')
+          && request.resource.data.helperStatus in ['Not yet', 'On it', 'Done']
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['helperStatus', 'helperUpdatedBy', 'helperUpdatedAt']))
+        ||
+        (hasRole('doctor')
+          && resource.data.emergencyType == 'Medical'
+          && resource.data.reportStatus == 'Pending'
+          && request.resource.data.reportStatus == 'Resolved'
+          && request.resource.data.resolvedBy == 'Doctor'
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['reportStatus', 'resolvedBy', 'resolvedAt']))
+      );
+
+      allow delete: if false;
+    }
+  }
+}
 
