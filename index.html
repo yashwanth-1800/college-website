@@ -145,8 +145,23 @@
       </section>
     </main>
 
-    <script type="module" src="auth.js?v=older-google-2"></script>
-    <script src="script.js?v=older-google-2"></script>
+    <script>
+      // OAuth providers cannot run from file://. Opening this file locally therefore
+      // forwards to the identical HTTPS deployment before Firebase is requested.
+      if (window.location.protocol === "file:") {
+        window.location.replace("https://yashwanth-1800.github.io/college-website/?source=local-file");
+      } else {
+        const authScript = document.createElement("script");
+        authScript.type = "module";
+        authScript.src = "auth.js?v=older-google-3";
+        authScript.addEventListener("load", () => {
+          const appScript = document.createElement("script");
+          appScript.src = "script.js?v=older-google-3";
+          document.body.append(appScript);
+        });
+        document.body.append(authScript);
+      }
+    </script>
   </body>
 </html>
 
