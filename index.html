@@ -153,10 +153,10 @@
       } else {
         const authScript = document.createElement("script");
         authScript.type = "module";
-        authScript.src = "auth.js?v=older-google-3";
+        authScript.src = "auth.js?v=vercel-redirect-1";
         authScript.addEventListener("load", () => {
           const appScript = document.createElement("script");
-          appScript.src = "script.js?v=older-google-3";
+          appScript.src = "script.js?v=vercel-redirect-1";
           document.body.append(appScript);
         });
         document.body.append(authScript);
