@@ -1,5 +1,108 @@
-import { createContext,useContext,useEffect,useState,type ReactNode } from "react"; import { onAuthStateChanged,signInWithPopup,signInWithRedirect,signOut as firebaseSignOut,type User } from "firebase/auth"; import { doc,getDoc,setDoc,serverTimestamp } from "firebase/firestore"; import { auth,db,googleProvider } from "./lib/firebase"; import type { Profile } from "./types";
-type AuthValue={user:User|null;profile:Profile|null;loading:boolean;signInWithGoogle:()=>Promise<void>;signOut:()=>Promise<void>}; const C=createContext<AuthValue|null>(null);
-const message=(code:string)=>({"auth/popup-closed-by-user":"Sign-in window closed.","auth/cancelled-popup-request":"Sign-in was cancelled.","auth/popup-blocked":"Popup blocked; redirecting to Google.","auth/network-request-failed":"Network error. Check your connection.","auth/account-exists-with-different-credential":"Use the provider linked to this email."}[code]||"Google sign-in failed. Please try again.");
-export function AuthProvider({children}:{children:ReactNode}){const [user,setUser]=useState<User|null>(null),[profile,setProfile]=useState<Profile|null>(null),[loading,setLoading]=useState(true);useEffect(()=>onAuthStateChanged(auth,async u=>{setUser(u);if(!u){setProfile(null);setLoading(false);return;}try{const ref=doc(db,"users",u.uid),snapshot=await getDoc(ref);if(!snapshot.exists())await setDoc(ref,{uid:u.uid,email:u.email,displayName:u.displayName,photoURL:u.photoURL,role:null,createdAt:serverTimestamp(),updatedAt:serverTimestamp()});else await setDoc(ref,{email:u.email,displayName:u.displayName,photoURL:u.photoURL,updatedAt:serverTimestamp()},{merge:true});const data=(await getDoc(ref)).data() as Profile;setProfile(data);}finally{setLoading(false)}}),[]);const signInWithGoogle=async()=>{try{await signInWithPopup(auth,googleProvider)}catch(e){const code=(e as {code?:string}).code||"";if(code==="auth/popup-blocked"){await signInWithRedirect(auth,googleProvider);return;}throw new Error(message(code));}};return <C.Provider value={{user,profile,loading,signInWithGoogle,signOut:()=>firebaseSignOut(auth)}}>{children}</C.Provider>} export const useAuth=()=>{const v=useContext(C);if(!v)throw new Error("AuthProvider missing");return v};
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  type ReactNode,
+} from "react";
+import {
+  onAuthStateChanged,
+  signInWithRedirect,
+  signOut as firebaseSignOut,
+  type User,
+} from "firebase/auth";
+import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
+import { auth, db, googleProvider } from "./lib/firebase";
+import type { Profile } from "./types";
 
+type AuthValue = {
+  user: User | null;
+  profile: Profile | null;
+  loading: boolean;
+  signInWithGoogle: () => Promise<void>;
+  signOut: () => Promise<void>;
+};
+
+const AuthContext = createContext<AuthValue | null>(null);
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<User | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(
+    () =>
+      onAuthStateChanged(auth, async (currentUser) => {
+        setUser(currentUser);
+
+        if (!currentUser) {
+          setProfile(null);
+          setLoading(false);
+          return;
+        }
+
+        try {
+          const profileReference = doc(db, "users", currentUser.uid);
+          const profileSnapshot = await getDoc(profileReference);
+
+          if (!profileSnapshot.exists()) {
+            await setDoc(profileReference, {
+              uid: currentUser.uid,
+              email: currentUser.email,
+              displayName: currentUser.displayName,
+              photoURL: currentUser.photoURL,
+              role: null,
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+            });
+          } else {
+            await setDoc(
+              profileReference,
+              {
+                email: currentUser.email,
+                displayName: currentUser.displayName,
+                photoURL: currentUser.photoURL,
+                updatedAt: serverTimestamp(),
+              },
+              { merge: true },
+            );
+          }
+
+          const savedProfile = await getDoc(profileReference);
+          setProfile(savedProfile.data() as Profile);
+        } finally {
+          setLoading(false);
+        }
+      }),
+    [],
+  );
+
+  const signInWithGoogle = async () => {
+    // A same-tab redirect works in embedded and mobile browsers that close OAuth popups.
+    await signInWithRedirect(auth, googleProvider);
+  };
+
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        profile,
+        loading,
+        signInWithGoogle,
+        signOut: () => firebaseSignOut(auth),
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+
+  if (!context) {
+    throw new Error("AuthProvider missing");
+  }
+
+  return context;
+};
