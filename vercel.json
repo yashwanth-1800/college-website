@@ -1,0 +1,9 @@
+{
+  "rewrites": [
+    {
+      "source": "/__/auth/:path*",
+      "destination": "https://emergency-app-f2850.firebaseapp.com/__/auth/:path*"
+    }
+  ]
+}
+
