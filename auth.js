@@ -2,16 +2,20 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/11.8.1/firebas
 import {
   GoogleAuthProvider,
   browserLocalPersistence,
+  getRedirectResult,
   getAuth,
   onAuthStateChanged,
   setPersistence,
   signInWithPopup,
+  signInWithRedirect,
   signOut,
 } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-auth.js";
 
+const usesSameOriginRedirect = window.location.hostname.endsWith(".vercel.app");
+const VERCEL_AUTH_DOMAIN = usesSameOriginRedirect ? window.location.hostname : "";
 const firebaseConfig = {
   apiKey: "AIzaSyD7NMp66LLaZYi_5uqbrbU-SFCJRCRyTmY",
-  authDomain: "emergency-app-f2850.firebaseapp.com",
+  authDomain: usesSameOriginRedirect ? VERCEL_AUTH_DOMAIN : "emergency-app-f2850.firebaseapp.com",
   projectId: "emergency-app-f2850",
   storageBucket: "emergency-app-f2850.firebasestorage.app",
   messagingSenderId: "206775317622",
@@ -100,11 +104,17 @@ function emitAuthState(error = "") {
 }
 
 async function signInWithGoogle() {
-  window.dispatchEvent(new CustomEvent("google-auth-progress", { detail: "Opening the Google account chooser…" }));
   const provider = new GoogleAuthProvider();
   provider.setCustomParameters({ prompt: "select_account" });
 
   try {
+    if (usesSameOriginRedirect) {
+      window.dispatchEvent(new CustomEvent("google-auth-progress", { detail: "Redirecting securely to Google…" }));
+      await signInWithRedirect(firebaseAuth, provider);
+      return true;
+    }
+
+    window.dispatchEvent(new CustomEvent("google-auth-progress", { detail: "Opening the Google account chooser…" }));
     await signInWithPopup(firebaseAuth, provider);
     return true;
   } catch (error) {
@@ -144,6 +154,15 @@ try {
   // Firebase uses an available fallback when durable persistence is unavailable.
 }
 
+let redirectError = "";
+if (usesSameOriginRedirect) {
+  try {
+    await getRedirectResult(firebaseAuth);
+  } catch {
+    redirectError = "Google sign-in could not be completed. Please try again.";
+  }
+}
+
 onAuthStateChanged(
   firebaseAuth,
   (user) => {
@@ -151,7 +170,7 @@ onAuthStateChanged(
     authStateReady = true;
     if (!user) clearStoredSession();
     resolveReady();
-    emitAuthState();
+    emitAuthState(redirectError);
   },
   () => {
     currentUser = null;
