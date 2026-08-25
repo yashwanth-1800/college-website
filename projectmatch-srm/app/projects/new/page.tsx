@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { getFirebaseServices } from "@/lib/firebase/client";
 import { saveCreatedProject, type StudentProject } from "@/lib/student-data";
+import { projectInputSchema } from "@/lib/validation";
 
 const projectTypes = ["Hackathon", "Startup", "Research", "Coursework", "Club initiative"];
 
@@ -30,17 +31,18 @@ export default function NewProjectPage() {
   const createProject = async () => {
     const categories = skills.split(",").map((item) => item.trim()).filter(Boolean);
     const openRoles = roles.split(",").map((item) => item.trim()).filter(Boolean);
-    if (!user || !title.trim() || !description.trim() || categories.length === 0 || openRoles.length === 0) {
-      setError("Add a title, description, at least one needed skill, and at least one open role.");
+    const parsed = projectInputSchema.safeParse({ title, type, description, commitment, categories, openRoles });
+    if (!user || !parsed.success) {
+      setError(parsed.success ? "Sign in before publishing a project." : parsed.error.issues[0]?.message ?? "Check the project details.");
       return;
     }
     setBusy(true);
     setError("");
     const project: StudentProject = {
       id: `student-${crypto.randomUUID()}`,
-      title: title.trim(), type, description: description.trim(),
-      commitment: commitment.trim() || "Flexible", timezone: "Asia/Kolkata",
-      categories, openRoles, roles: openRoles.length,
+      title: parsed.data.title, type: parsed.data.type, description: parsed.data.description,
+      commitment: parsed.data.commitment, timezone: "Asia/Kolkata",
+      categories: parsed.data.categories, openRoles: parsed.data.openRoles, roles: parsed.data.openRoles.length,
       ownerId: user.uid, ownerName: user.displayName ?? "SRM student",
       institution: "SRM University", createdAtMs: Date.now(),
     };

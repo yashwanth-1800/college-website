@@ -9,6 +9,7 @@ import type { DemoProject } from "@/lib/demo-data";
 import { campusName, projects } from "@/lib/demo-data";
 import { getFirebaseServices } from "@/lib/firebase/client";
 import { readChat, readCreatedProjects, saveChat, type ChatMessage, type StudentProject } from "@/lib/student-data";
+import { applicationInputSchema, messageInputSchema } from "@/lib/validation";
 
 export default function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -50,8 +51,9 @@ export default function ProjectDetailPage() {
   const apply = async () => {
     const { auth, db } = getFirebaseServices();
     if (!auth.currentUser) { router.push(`/signin?next=/projects/${project.id}`); return; }
-    if (!role) { setApplicationMessage("Choose the role you want to apply for."); return; }
-    const application = { projectId: project.id, projectTitle: project.title, role, note: note.trim(), status: "PENDING", applicantId: auth.currentUser.uid, applicantName: auth.currentUser.displayName, applicantEmail: auth.currentUser.email };
+    const parsed = applicationInputSchema.safeParse({ role, note });
+    if (!parsed.success) { setApplicationMessage(parsed.error.issues[0]?.message ?? "Check your application."); return; }
+    const application = { projectId: project.id, projectTitle: project.title, role: parsed.data.role, note: parsed.data.note, status: "PENDING", applicantId: auth.currentUser.uid, applicantName: auth.currentUser.displayName, applicantEmail: auth.currentUser.email };
     localStorage.setItem(`projectmatch-application-${project.id}`, JSON.stringify(application));
     await setDoc(doc(db, "applications", `${auth.currentUser.uid}_${project.id}`), { ...application, createdAt: serverTimestamp() }, { merge: true }).catch(() => undefined);
     setApplicationStatus("applied");
@@ -59,9 +61,10 @@ export default function ProjectDetailPage() {
   };
 
   const sendMessage = async () => {
-    const body = chatText.trim();
+    const parsed = messageInputSchema.safeParse(chatText);
     if (!user) { router.push(`/signin?next=/projects/${project.id}`); return; }
-    if (!body) return;
+    if (!parsed.success) { setChatStatus("Write a message of up to 500 characters."); return; }
+    const body = parsed.data;
     const message: ChatMessage = { id: crypto.randomUUID(), authorId: user.uid, authorName: user.displayName ?? "SRM student", body, createdAtMs: Date.now() };
     const nextMessages = [...messages, message];
     setMessages(nextMessages);

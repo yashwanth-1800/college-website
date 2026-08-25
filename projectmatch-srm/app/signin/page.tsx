@@ -2,18 +2,14 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { onAuthStateChanged, signInWithPopup } from "firebase/auth";
+import { getRedirectResult, onAuthStateChanged, signInWithRedirect } from "firebase/auth";
 import { getFirebaseServices, googleProvider, isFirebaseConfigured } from "@/lib/firebase/client";
-
-const SIGN_IN_TIMEOUT_MS = 45_000;
 
 function errorMessage(error: unknown): string {
   const code = (error as { code?: string }).code;
   if (code === "auth/unauthorized-domain") return "This address is not authorized in Firebase. Add localhost and your deployed domain under Authentication → Settings → Authorized domains.";
   if (code === "auth/web-storage-unsupported") return "This browser blocked secure sign-in storage. Allow site storage or open ProjectMatch in Chrome, Edge, or Safari.";
   if (code === "auth/network-request-failed") return "Google sign-in could not reach Firebase. Check your connection, confirm localhost is an authorized Firebase domain, and try again.";
-  if (code === "auth/popup-blocked") return "The Google sign-in window was blocked. Allow popups for this address, then try again.";
-  if (code === "auth/popup-closed-by-user") return "The Google sign-in window was closed before authentication finished. Please try again.";
   if (code === "auth/argument-error") return "Google sign-in could not start correctly. Reload this updated page and try again.";
   return error instanceof Error ? error.message : "Google sign-in could not be completed.";
 }
@@ -34,7 +30,14 @@ export default function SignInPage() {
 
   useEffect(() => {
     if (!isFirebaseConfigured) return;
-    return onAuthStateChanged(getFirebaseServices().auth, (user) => {
+    const auth = getFirebaseServices().auth;
+    void getRedirectResult(auth).then((result) => {
+      if (result?.user) finishSignIn();
+    }).catch((error: unknown) => {
+      setStatus(errorMessage(error));
+      setBusy(false);
+    });
+    return onAuthStateChanged(auth, (user) => {
       if (user) finishSignIn();
       else if (!redirecting.current) setBusy(false);
     }, (error) => {
@@ -46,22 +49,14 @@ export default function SignInPage() {
   const signIn = async () => {
     if (busy || redirecting.current) return;
     setBusy(true);
-    setStatus("Opening Google sign-in…");
-    let timeoutId: number | undefined;
+    setStatus("Redirecting securely to Google…");
     try {
-      const timeout = new Promise<never>((_, reject) => {
-        timeoutId = window.setTimeout(() => reject(new Error("Google sign-in did not finish within 45 seconds. The button has been reset so you can try again.")), SIGN_IN_TIMEOUT_MS);
-      });
-      const result = await Promise.race([signInWithPopup(getFirebaseServices().auth, googleProvider), timeout]);
-      if (!result.user) throw new Error("Google sign-in completed without a user account.");
-      finishSignIn();
+      await signInWithRedirect(getFirebaseServices().auth, googleProvider);
     } catch (error: unknown) {
       if (!redirecting.current) {
         setStatus(errorMessage(error));
         setBusy(false);
       }
-    } finally {
-      if (timeoutId !== undefined) window.clearTimeout(timeoutId);
     }
   };
 

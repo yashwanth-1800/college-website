@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState } from "react";
 import { people } from "@/lib/demo-data";
 import { getFirebaseServices } from "@/lib/firebase/client";
 import { conversationId, readDirectChat, saveDirectChat, type ChatMessage } from "@/lib/student-data";
+import { messageInputSchema } from "@/lib/validation";
 
 export default function DirectMessagePage() {
   const { studentId } = useParams<{ studentId: string }>();
@@ -46,8 +47,9 @@ export default function DirectMessagePage() {
   }, [studentId, user]);
 
   const sendMessage = async () => {
-    const body = text.trim();
-    if (!user || !body) return;
+    const parsed = messageInputSchema.safeParse(text);
+    if (!user || !parsed.success) return;
+    const body = parsed.data;
     const id = conversationId(user.uid, studentId);
     const message: ChatMessage = { id: crypto.randomUUID(), authorId: user.uid, authorName: user.displayName ?? "SRM student", body, createdAtMs: Date.now() };
     const nextMessages = [...messages, message];
