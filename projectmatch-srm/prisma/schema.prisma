@@ -1,0 +1,378 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum ExperienceLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+  EXPERT
+}
+enum AvailabilitySlot {
+  MORNING
+  AFTERNOON
+  EVENING
+  NIGHT
+}
+enum AvailabilitySource {
+  MANUAL
+  GOOGLE_CALENDAR
+}
+enum ProjectType {
+  HACKATHON
+  STARTUP
+  RESEARCH
+  COURSEWORK
+  OPENSOURCE
+}
+enum ProjectStatus {
+  OPEN
+  FORMING
+  ACTIVE
+  CLOSED
+}
+enum ApplicationDirection {
+  APPLIED
+  INVITED
+}
+enum ApplicationStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  WITHDRAWN
+}
+enum MatchDecision {
+  ACCEPTED
+  REJECTED
+}
+enum DraftStatus {
+  UPCOMING
+  ACTIVE
+  ENDED
+}
+
+model User {
+  id String @id @default(cuid())
+  name String?
+  email String? @unique
+  emailVerified DateTime?
+  image String?
+  handle String? @unique
+  bio String?
+  timezone String @default("Asia/Kolkata")
+  experienceLevel ExperienceLevel @default(BEGINNER)
+  hoursPerWeek Int @default(5)
+  isOpenToWork Boolean @default(true)
+  orgDomain String?
+  isVerified Boolean @default(false)
+  onboardingCompleted Boolean @default(false)
+  reliabilityScore Float @default(70)
+  lastActiveAt DateTime?
+  createdAt DateTime @default(now())
+  accounts Account[]
+  sessions Session[]
+  skills UserSkill[]
+  interests UserInterest[]
+  availability AvailabilityBlock[]
+  calendarSync CalendarSync?
+  workStyle WorkStyle?
+  ownedProjects Project[] @relation("ProjectOwner")
+  applications Application[]
+  memberships TeamMember[]
+  endorsementsReceived Endorsement[] @relation("EndorsementRecipient")
+  endorsementsGiven Endorsement[] @relation("EndorsementAuthor")
+  collaborationsA Collaboration[] @relation("CollaborationA")
+  collaborationsB Collaboration[] @relation("CollaborationB")
+  feedback MatchFeedback[]
+  draftInterests DraftInterest[]
+  @@index([isOpenToWork])
+}
+
+model Account {
+  id String @id @default(cuid())
+  userId String
+  type String
+  provider String
+  providerAccountId String
+  refresh_token String? @db.Text
+  access_token String? @db.Text
+  expires_at Int?
+  token_type String?
+  scope String?
+  id_token String? @db.Text
+  session_state String?
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id String @id @default(cuid())
+  sessionToken String @unique
+  userId String
+  expires DateTime
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token String @unique
+  expires DateTime
+  @@unique([identifier, token])
+}
+
+model Skill {
+  id String @id @default(cuid())
+  name String @unique
+  category String
+  slug String @unique
+  users UserSkill[]
+  roleSkills RoleSkill[]
+  fromEdges SkillEdge[] @relation("SkillEdgeFrom")
+  toEdges SkillEdge[] @relation("SkillEdgeTo")
+  endorsements Endorsement[]
+}
+
+model UserSkill {
+  userId String
+  skillId String
+  proficiency Int
+  yearsExperience Float
+  wantsToLearn Boolean @default(false)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skill Skill @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  @@id([userId, skillId])
+  @@index([skillId])
+}
+
+model AvailabilityBlock {
+  id String @id @default(cuid())
+  userId String
+  dayOfWeek Int
+  slot AvailabilitySlot
+  source AvailabilitySource
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
+}
+
+model Project {
+  id String @id @default(cuid())
+  ownerId String
+  slug String @unique
+  title String
+  summary String
+  description String
+  type ProjectType
+  startDate DateTime
+  endDate DateTime
+  commitmentHoursPerWeek Int
+  timezonePreference String
+  status ProjectStatus @default(OPEN)
+  isPublic Boolean @default(true)
+  createdAt DateTime @default(now())
+  owner User @relation("ProjectOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  roles Role[]
+  tags ProjectTag[]
+  members TeamMember[]
+  collaborations Collaboration[]
+  endorsements Endorsement[]
+  weights ProjectWeights?
+  feedback MatchFeedback[]
+  @@index([ownerId])
+  @@index([status])
+}
+
+model Role {
+  id String @id @default(cuid())
+  projectId String
+  title String
+  description String
+  seats Int @default(1)
+  minExperienceLevel ExperienceLevel
+  hoursPerWeek Int
+  isOpen Boolean @default(true)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  skills RoleSkill[]
+  applications Application[]
+  members TeamMember[]
+  feedback MatchFeedback[]
+  draftInterests DraftInterest[]
+  @@index([projectId])
+  @@index([isOpen])
+}
+
+model RoleSkill {
+  roleId String
+  skillId String
+  minProficiency Int
+  weight Float
+  isRequired Boolean @default(true)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  skill Skill @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  @@id([roleId, skillId])
+}
+
+model Application {
+  id String @id @default(cuid())
+  roleId String
+  userId String
+  direction ApplicationDirection
+  status ApplicationStatus @default(PENDING)
+  message String?
+  matchScoreSnapshot Json
+  createdAt DateTime @default(now())
+  decidedAt DateTime?
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([roleId, userId])
+}
+
+model Interest {
+  id String @id @default(cuid())
+  name String @unique
+  slug String @unique
+  users UserInterest[]
+  projectTags ProjectTag[]
+}
+
+model UserInterest {
+  userId String
+  interestId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  interest Interest @relation(fields: [interestId], references: [id], onDelete: Cascade)
+  @@id([userId, interestId])
+  @@index([interestId])
+}
+
+model SkillEdge {
+  fromSkillId String
+  toSkillId String
+  weight Float
+  fromSkill Skill @relation("SkillEdgeFrom", fields: [fromSkillId], references: [id], onDelete: Cascade)
+  toSkill Skill @relation("SkillEdgeTo", fields: [toSkillId], references: [id], onDelete: Cascade)
+  @@id([fromSkillId, toSkillId])
+  @@index([toSkillId])
+}
+
+model CalendarSync {
+  userId String @id
+  connected Boolean @default(false)
+  lastSyncedAt DateTime?
+  scopeGranted String?
+  syncError String?
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model WorkStyle {
+  userId String @id
+  asyncPreference Int
+  planningStyle Int
+  chronotype Int
+  feedbackDirectness Int
+  riskAppetite Int
+  leadershipInclination Int
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ProjectTag {
+  projectId String
+  interestId String
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  interest Interest @relation(fields: [interestId], references: [id], onDelete: Cascade)
+  @@id([projectId, interestId])
+}
+
+model TeamMember {
+  id String @id @default(cuid())
+  projectId String
+  userId String
+  roleId String
+  joinedAt DateTime @default(now())
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id])
+  @@unique([projectId, userId])
+  @@index([userId])
+  @@index([roleId])
+}
+
+model Collaboration {
+  id String @id @default(cuid())
+  userAId String
+  userBId String
+  projectId String
+  count Int @default(1)
+  userA User @relation("CollaborationA", fields: [userAId], references: [id], onDelete: Cascade)
+  userB User @relation("CollaborationB", fields: [userBId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  @@index([userAId])
+  @@index([userBId])
+  @@index([projectId])
+}
+
+model Endorsement {
+  id String @id @default(cuid())
+  fromUserId String
+  toUserId String
+  skillId String
+  projectId String
+  comment String?
+  createdAt DateTime @default(now())
+  fromUser User @relation("EndorsementAuthor", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUser User @relation("EndorsementRecipient", fields: [toUserId], references: [id], onDelete: Cascade)
+  skill Skill @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  @@unique([fromUserId, toUserId, skillId])
+}
+
+model MatchFeedback {
+  id String @id @default(cuid())
+  projectId String
+  roleId String
+  userId String
+  decision MatchDecision
+  scoreSnapshot Json
+  createdAt DateTime @default(now())
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ProjectWeights {
+  projectId String @id
+  skillFit Float
+  gapCoverage Float
+  availability Float
+  interest Float
+  experience Float
+  chemistry Float
+  novelty Float
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model DraftSession {
+  id String @id @default(cuid())
+  projectScope String
+  startsAt DateTime
+  endsAt DateTime
+  status DraftStatus @default(UPCOMING)
+  interests DraftInterest[]
+}
+
+model DraftInterest {
+  id String @id @default(cuid())
+  draftSessionId String
+  userId String
+  roleId String
+  createdAt DateTime @default(now())
+  session DraftSession @relation(fields: [draftSessionId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+}

@@ -1,0 +1,11 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { color-scheme: light; }
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: #f4f7fb; font-family: var(--font-inter), Arial, sans-serif; }
+.hero-bg { background-image: url('/images/projectmatch-office.jpg'); background-position: center; background-size: cover; }
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid #38bdf8; outline-offset: 3px; }
+::selection { background: #bae6fd; color: #082f49; }
