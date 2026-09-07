@@ -4,14 +4,13 @@ ProjectMatch is a campus-first team formation platform for SRM University studen
 
 ## Live application
 
-[Open the latest ProjectMatch deployment](https://projectmatch-srm-hack2skill-final.vercel.app)
+[Open ProjectMatch on Vercel](https://projectmatch-srm-hack2skill-final.vercel.app/)
 
-## Run locally
+## Development setup
 
 1. Copy `.env.example` to `.env.local` and add the Firebase web configuration.
 2. Install dependencies with `npm install` or `pnpm install`.
-3. Run `npm run dev`.
-4. Open `http://localhost:3000`.
+3. Run `npm run dev` when making local changes.
 
 ## Verification
 
@@ -32,4 +31,3 @@ npm run build
 - Firestore synchronization with local persistence fallback
 
 The background photograph is stored in `public/images/projectmatch-office.jpg`.
-
