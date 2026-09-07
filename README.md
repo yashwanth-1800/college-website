@@ -1,21 +1,22 @@
-# Run locally
+# Yashwanth's College Web Projects
 
-Do **not** open `index.html` by double-clicking it. Firebase's JavaScript modules must be served over HTTP/HTTPS, not from a `file:///` URL.
+This repository contains two deployed college applications. Use the links below to open them directly—no localhost setup is required.
 
-From this folder, run:
+## Live applications
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\start-local-server.ps1
-```
+### Campus Emergency Response
 
-Then open [http://localhost:8080](http://localhost:8080) in your browser.
+A role-based campus emergency reporting and response application for students, volunteers, and doctors.
 
-If port 8080 is busy, choose another port:
+[Open Campus Emergency Response on Vercel](https://campus-emergency-response.vercel.app/)
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\start-local-server.ps1 -Port 8081
-```
+### ProjectMatch — SRM Kattankulathur
 
-Then visit `http://localhost:8081`.
+A campus-first platform for discovering project ideas, forming student teams, applying for roles, and collaborating.
 
-For Google sign-in, also add `localhost` and your deployment domain to **Firebase Authentication → Settings → Authorized domains**.
+[Open ProjectMatch on Vercel](https://projectmatch-srm-hack2skill-final.vercel.app/)
+
+## Source code
+
+- The Campus Emergency Response source is stored at the repository root.
+- The ProjectMatch source is stored in the `projectmatch-srm` directory.
