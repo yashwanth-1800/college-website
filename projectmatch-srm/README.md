@@ -2,6 +2,10 @@
 
 ProjectMatch is a campus-first team formation platform for SRM University students. Students can create profiles, publish project ideas, set dated availability, apply for open roles, join project discussions, and send private messages to other students.
 
+## Live application
+
+[Open the latest ProjectMatch deployment](https://projectmatch-srm-hack2skill-final.vercel.app)
+
 ## Run locally
 
 1. Copy `.env.example` to `.env.local` and add the Firebase web configuration.
@@ -28,3 +32,4 @@ npm run build
 - Firestore synchronization with local persistence fallback
 
 The background photograph is stored in `public/images/projectmatch-office.jpg`.
+
