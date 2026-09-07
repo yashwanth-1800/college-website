@@ -29,4 +29,3 @@ export interface EmergencyReport {
   resolvedBy?: "Doctor";
   resolvedAt?: string;
 }
-

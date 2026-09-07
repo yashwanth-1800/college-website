@@ -180,4 +180,3 @@ onAuthStateChanged(
     emitAuthState("Google authentication could not be initialized. Refresh the page and try again.");
   },
 );
-

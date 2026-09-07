@@ -17,4 +17,3 @@ try {
     $context.Response.ContentLength64 = $bytes.Length; $context.Response.OutputStream.Write($bytes, 0, $bytes.Length); $context.Response.Close()
   }
 } finally { $listener.Close() }
-

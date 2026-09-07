@@ -19,4 +19,3 @@ powershell -ExecutionPolicy Bypass -File .\start-local-server.ps1 -Port 8081
 Then visit `http://localhost:8081`.
 
 For Google sign-in, also add `localhost` and your deployment domain to **Firebase Authentication → Settings → Authorized domains**.
-

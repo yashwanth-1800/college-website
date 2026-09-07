@@ -575,4 +575,3 @@ if (window.Auth) {
 } else {
   window.addEventListener("auth-module-ready", startApp, { once: true });
 }
-
