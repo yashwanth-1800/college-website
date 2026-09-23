@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="A campus emergency reporting prototype for students, volunteers, and doctors." />
+    <meta name="description" content="A smart campus emergency response platform with priority classification, AI-assisted summaries, timelines, and operational analytics." />
     <title>Campus Emergency Response</title>
     <link rel="stylesheet" href="style.css?v=older-google-1" />
   </head>
@@ -18,6 +18,18 @@
 
     <main class="container">
       <section id="login-view" class="login-layout" aria-labelledby="login-heading">
+        <aside class="intelligence-banner" aria-labelledby="intelligence-heading">
+          <div class="intelligence-mark" aria-hidden="true">AI</div>
+          <div>
+            <p class="eyebrow">Smart incident intelligence</p>
+            <h2 id="intelligence-heading">Faster context for safer response</h2>
+            <p>Every submitted report receives an automatic safety priority, a concise AI-assisted responder summary, and live workflow tracking.</p>
+            <div class="intelligence-features" aria-label="Smart response features">
+              <span>Smart priority</span><span>AI-assisted summaries</span><span>Risk analytics</span>
+            </div>
+            <p class="intelligence-note">Safety-critical classifications use deterministic rules. Administrators can review and override every recommendation.</p>
+          </div>
+        </aside>
         <div class="login-intro">
           <p class="eyebrow">Secure access</p>
           <h2 id="login-heading">Sign in to continue</h2>
@@ -61,6 +73,10 @@
                 <input type="radio" name="login-role" value="Doctor" />
                 <span><strong>Doctor</strong><small>Review and resolve pending medical cases.</small></span>
               </label>
+              <label class="role-card">
+                <input type="radio" name="login-role" value="Administrator" />
+                <span><strong>Administrator</strong><small>Coordinate response status, priority review, analytics, and hotspots.</small></span>
+              </label>
             </fieldset>
             <p id="login-role-error" class="field-error" role="alert"></p>
             <button id="login-button" class="primary-button" type="submit" disabled>Continue to dashboard</button>
@@ -81,17 +97,27 @@
           <p class="security-note">Prototype notice: Google verifies the signed-in account, but the dashboard role choice is not security. Real deployment requires backend authentication, server-side role authorization, secure database storage, audit logs, and appropriate privacy controls.</p>
         </section>
 
+        <aside class="intelligence-status" aria-label="Smart incident intelligence status">
+          <span class="intelligence-pulse" aria-hidden="true"></span>
+          <div><strong>Smart Incident Intelligence is active</strong><span>Automatic priority, AI-assisted summaries, timeline monitoring, and risk analytics are enabled.</span></div>
+        </aside>
+
         <p id="app-status" class="status-message" role="status" aria-live="polite"></p>
 
         <section id="student-form-section" class="panel form-panel" aria-labelledby="form-heading">
           <div class="section-heading">
-            <div><p class="eyebrow">Student report</p><h2 id="form-heading">Report an emergency</h2></div>
+            <div><p class="eyebrow">Quick report mode</p><h2 id="form-heading">Report an emergency in four steps</h2></div>
             <p class="required-note"><span aria-hidden="true">*</span> Required fields</p>
           </div>
 
           <form id="emergency-form" novalidate>
-            <div class="field-group">
-              <label for="emergency-type">Emergency type <span aria-hidden="true">*</span></label>
+            <ol class="quick-steps" aria-label="Emergency report steps">
+              <li><span>1</span>Type</li><li><span>2</span>Location</li><li><span>3</span>Description</li><li><span>4</span>Submit</li>
+            </ol>
+
+            <div class="field-group quick-step-panel">
+              <p class="step-label">Step 1</p>
+              <label for="emergency-type">Select emergency type <span aria-hidden="true">*</span></label>
               <select id="emergency-type" aria-describedby="type-error" required>
                 <option value="">Select an emergency type</option>
                 <option>Medical</option><option>Fire</option><option>Security</option><option>Accident</option><option>Other</option>
@@ -99,37 +125,70 @@
               <p id="type-error" class="field-error" role="alert"></p>
             </div>
 
-            <div class="field-group">
+            <fieldset class="location-fieldset quick-step-panel">
+              <legend><span class="step-label">Step 2</span> Select location</legend>
+              <div class="location-grid">
+                <div class="field-group">
+                  <label for="campus">Campus <span aria-hidden="true">*</span></label>
+                  <select id="campus" required><option>SRM Campus</option></select>
+                </div>
+                <div class="field-group">
+                  <label for="building">Building / block <span aria-hidden="true">*</span></label>
+                  <select id="building" aria-describedby="location-error" required>
+                    <option value="">Select a building or area</option>
+                    <option>Main Gate</option><option>Administration Building</option><option>Library</option>
+                    <option>Science Block</option><option>Engineering Block</option><option>Tech Park</option>
+                    <option>Student Hostel</option><option>Cafeteria</option><option>Sports Ground</option>
+                    <option>Parking Area</option><option>Other</option>
+                  </select>
+                </div>
+                <div class="field-group">
+                  <label for="floor">Floor <span aria-hidden="true">*</span></label>
+                  <select id="floor" aria-describedby="location-error" required>
+                    <option value="">Select a floor</option><option>Outdoor / Not applicable</option><option>Ground Floor</option>
+                    <option>Floor 1</option><option>Floor 2</option><option>Floor 3</option><option>Floor 4</option>
+                    <option>Floor 5</option><option>Floor 6</option><option>Floor 7</option><option>Floor 8</option>
+                  </select>
+                </div>
+                <div class="field-group">
+                  <label for="area">Room / area <span class="optional-label">Optional</span></label>
+                  <input id="area" maxlength="80" placeholder="Example: Lab 402" autocomplete="off" />
+                </div>
+              </div>
+              <p id="location-error" class="field-error" role="alert"></p>
+            </fieldset>
+
+            <div class="field-group quick-step-panel">
+              <p class="step-label">Step 3</p>
               <div class="label-row">
-                <label for="description">What is the emergency? <span aria-hidden="true">*</span></label>
+                <label for="description">Short description <span aria-hidden="true">*</span></label>
                 <span id="character-count" class="character-count">0 / 300</span>
               </div>
               <textarea id="description" minlength="5" maxlength="300" aria-describedby="description-help description-error character-count" required></textarea>
-              <p id="description-help" class="field-help">Enter 5 to 300 characters. Avoid private information unless essential.</p>
+              <p id="description-help" class="field-help">State what is happening in 5 to 300 characters. Avoid private information unless essential.</p>
               <p id="description-error" class="field-error" role="alert"></p>
             </div>
 
-            <div class="field-group">
-              <label for="location">Campus location <span aria-hidden="true">*</span></label>
-              <select id="location" aria-describedby="location-error" required>
-                <option value="">Select a campus location</option>
-                <option>Main Gate</option><option>Administration Building</option><option>Library</option>
-                <option>Science Block</option><option>Engineering Block</option><option>Student Hostel</option>
-                <option>Cafeteria</option><option>Sports Ground</option><option>Parking Area</option><option>Other</option>
-              </select>
-              <p id="location-error" class="field-error" role="alert"></p>
+            <div class="submit-row">
+              <div><p class="step-label">Step 4</p><p class="field-help">Priority is assigned automatically using safety rules and can be reviewed by an administrator.</p></div>
+              <button class="primary-button" type="submit">Report Emergency</button>
             </div>
-
-            <fieldset class="severity-fieldset">
-              <legend>Severity level <span aria-hidden="true">*</span></legend>
-              <label class="severity-option"><input type="radio" name="severity" value="Low" /><span><strong>Low severity</strong><small>Volunteers check and assist on-site.</small></span></label>
-              <label class="severity-option"><input type="radio" name="severity" value="Medium" /><span><strong>Medium severity</strong><small>Volunteers escort the student to the medical block.</small></span></label>
-              <label class="severity-option"><input type="radio" name="severity" value="High" /><span><strong>High severity</strong><small>Volunteers coordinate with doctors or bring immediate medical help.</small></span></label>
-              <p id="severity-error" class="field-error" role="alert"></p>
-            </fieldset>
-
-            <button class="primary-button" type="submit">Report Emergency</button>
           </form>
+        </section>
+
+        <section id="student-tracking-section" class="panel tracking-panel" aria-labelledby="tracking-heading">
+          <div class="section-heading">
+            <div><p class="eyebrow">Report tracking</p><h2 id="tracking-heading">Track an incident by Report ID</h2></div>
+          </div>
+          <form id="tracking-form" class="tracking-form">
+            <label for="tracking-id">Report ID</label>
+            <div class="tracking-controls">
+              <input id="tracking-id" placeholder="Example: EMG-20260922-ABC123" autocomplete="off" />
+              <button class="secondary-button" type="submit">Track report</button>
+            </div>
+            <p id="tracking-error" class="field-error" role="alert"></p>
+          </form>
+          <div id="tracking-result" aria-live="polite"></div>
         </section>
 
         <section class="dashboard" aria-labelledby="reports-heading">
@@ -138,6 +197,19 @@
             <p id="report-count" class="report-count"></p>
           </div>
           <div id="summary-cards" class="summary-grid" aria-label="Report summary"></div>
+          <section id="admin-analytics" class="analytics-panel" aria-labelledby="analytics-heading" hidden>
+            <div class="section-heading">
+              <div><p class="eyebrow">Operational intelligence</p><h2 id="analytics-heading">Emergency analytics</h2></div>
+              <p class="required-note">Calculated from stored incidents</p>
+            </div>
+            <div id="analytics-metrics" class="analytics-metrics"></div>
+            <div class="analytics-grid">
+              <article class="analytics-card"><h3>Incidents by category</h3><div id="category-chart" class="bar-chart"></div></article>
+              <article class="analytics-card"><h3>Incidents by location</h3><div id="location-chart" class="bar-chart"></div></article>
+              <article class="analytics-card"><h3>7-day incident trend</h3><div id="trend-chart" class="bar-chart"></div></article>
+              <article class="analytics-card hotspot-card"><h3>Recurring incident area</h3><div id="hotspot-result"></div></article>
+            </div>
+          </section>
           <p id="workflow-note" class="workflow-note"></p>
           <div id="filters" class="filters" aria-label="Report filters"></div>
           <div id="reports-list" class="reports-list"></div>
@@ -145,21 +217,13 @@
       </section>
     </main>
 
-    <script>
+    <script type="module">
       // OAuth providers cannot run from file://. Opening this file locally therefore
       // forwards to the identical HTTPS deployment before Firebase is requested.
       if (window.location.protocol === "file:") {
         window.location.replace("https://yashwanth-1800.github.io/college-website/?source=local-file");
       } else {
-        const authScript = document.createElement("script");
-        authScript.type = "module";
-        authScript.src = "auth.js?v=same-origin-3";
-        authScript.addEventListener("load", () => {
-          const appScript = document.createElement("script");
-          appScript.src = "script.js?v=same-origin-3";
-          document.body.append(appScript);
-        });
-        document.body.append(authScript);
+        import("./bootstrap.js");
       }
     </script>
   </body>

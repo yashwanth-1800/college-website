@@ -23,7 +23,7 @@ const firebaseConfig = {
 };
 
 const SESSION_KEY = "campusEmergencySession";
-const ROLES = ["Student", "Volunteer", "Doctor"];
+const ROLES = ["Student", "Volunteer", "Doctor", "Administrator"];
 const app = initializeApp(firebaseConfig);
 const firebaseAuth = getAuth(app);
 
@@ -148,35 +148,39 @@ window.Auth = {
 
 window.dispatchEvent(new Event("auth-module-ready"));
 
-try {
-  await setPersistence(firebaseAuth, browserLocalPersistence);
-} catch {
-  // Firebase uses an available fallback when durable persistence is unavailable.
-}
-
-let redirectError = "";
-if (usesSameOriginRedirect) {
+async function initializeAuthentication() {
   try {
-    await getRedirectResult(firebaseAuth);
+    await setPersistence(firebaseAuth, browserLocalPersistence);
   } catch {
-    redirectError = "Google sign-in could not be completed. Please try again.";
+    // Firebase uses an available fallback when durable persistence is unavailable.
   }
+
+  let redirectError = "";
+  if (usesSameOriginRedirect) {
+    try {
+      await getRedirectResult(firebaseAuth);
+    } catch {
+      redirectError = "Google sign-in could not be completed. Please try again.";
+    }
+  }
+
+  onAuthStateChanged(
+    firebaseAuth,
+    (user) => {
+      currentUser = user;
+      authStateReady = true;
+      if (!user) clearStoredSession();
+      resolveReady();
+      emitAuthState(redirectError);
+    },
+    () => {
+      currentUser = null;
+      authStateReady = true;
+      clearStoredSession();
+      resolveReady();
+      emitAuthState("Google authentication could not be initialized. Refresh the page and try again.");
+    },
+  );
 }
 
-onAuthStateChanged(
-  firebaseAuth,
-  (user) => {
-    currentUser = user;
-    authStateReady = true;
-    if (!user) clearStoredSession();
-    resolveReady();
-    emitAuthState(redirectError);
-  },
-  () => {
-    currentUser = null;
-    authStateReady = true;
-    clearStoredSession();
-    resolveReady();
-    emitAuthState("Google authentication could not be initialized. Refresh the page and try again.");
-  },
-);
+initializeAuthentication();
