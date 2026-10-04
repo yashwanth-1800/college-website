@@ -1,4 +1,5 @@
 import { adminDb, adminMessaging, requireCampusUser, sendApiError } from "./_firebase-admin.js";
+import { allowWebClient } from "./_cors.js";
 
 const EVENT_MESSAGES = {
   "report-created": (report) => ({ title: `${report.priority} campus incident`, body: `${report.emergencyType} · ${report.location?.building || "Campus"}` }),
@@ -8,6 +9,7 @@ const EVENT_MESSAGES = {
 };
 
 export default async function handler(request, response) {
+  if (allowWebClient(request, response)) return;
   if (request.method !== "POST") return response.status(405).json({ error: "Method not allowed." });
   try {
     const actor = await requireCampusUser(request);

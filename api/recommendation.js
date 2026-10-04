@@ -1,6 +1,7 @@
 import { generateText, Output } from "ai";
 import { z } from "zod";
 import { requireFirebaseUser } from "./_firebase-user.js";
+import { allowWebClient } from "./_cors.js";
 
 const recommendationSchema = z.object({
   summary: z.string().min(5).max(180),
@@ -16,6 +17,7 @@ function clean(value, maximum) {
 }
 
 export default async function handler(request, response) {
+  if (allowWebClient(request, response)) return;
   if (request.method !== "POST") return response.status(405).json({ error: "Method not allowed." });
   try {
     await requireFirebaseUser(request, ["Student"]);

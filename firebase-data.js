@@ -23,6 +23,9 @@ import {
 import { app, db, storage } from "./firebase-services.js";
 
 const LOCAL_FALLBACK_KEY = "campusEmergencyReports";
+const API_ORIGIN = window.location.hostname.endsWith("github.io")
+  ? "https://campus-emergency-response.vercel.app"
+  : "";
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 const ALLOWED_ATTACHMENT_TYPES = new Set([
   "image/jpeg", "image/png", "image/webp", "audio/mpeg", "audio/webm", "application/pdf",
@@ -309,7 +312,7 @@ async function getResponderNotes(reportId) {
 async function requestAiRecommendation(input) {
   const token = await window.Auth.getIdToken();
   if (!token) throw new Error("Sign in before requesting an AI recommendation.");
-  const response = await fetch("/api/recommendation", {
+  const response = await fetch(`${API_ORIGIN}/api/recommendation`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     body: JSON.stringify(input),
@@ -321,7 +324,7 @@ async function requestAiRecommendation(input) {
 async function callNotificationApi(event, reportId) {
   const token = await window.Auth.getIdToken();
   if (!token) return;
-  await fetch("/api/notifications", {
+  await fetch(`${API_ORIGIN}/api/notifications`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     body: JSON.stringify({ event, reportId }),
@@ -336,7 +339,7 @@ async function requestNotifications() {
   if (!vapidKey || isLocalQa()) return { browserOnly: true };
   const [{ getMessaging, getToken }, registration] = await Promise.all([
     import("https://www.gstatic.com/firebasejs/11.8.1/firebase-messaging.js"),
-    navigator.serviceWorker.register("/firebase-messaging-sw.js"),
+    navigator.serviceWorker.register(new URL("firebase-messaging-sw.js", document.baseURI).pathname),
   ]);
   const token = await getToken(getMessaging(app), { vapidKey, serviceWorkerRegistration: registration });
   const session = currentSession();
