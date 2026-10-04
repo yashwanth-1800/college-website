@@ -25,6 +25,9 @@ export const auth = getAuth(app);
 let database;
 try {
   database = initializeFirestore(app, {
+    // Long polling avoids WebChannel stalls in embedded browsers and strict
+    // campus networks while preserving the same real-time Firestore API.
+    experimentalForceLongPolling: true,
     localCache: persistentLocalCache({
       tabManager: persistentMultipleTabManager(),
     }),

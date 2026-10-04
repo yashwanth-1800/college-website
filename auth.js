@@ -32,6 +32,16 @@ const readyPromise = new Promise((resolve) => {
   resolveReady = resolve;
 });
 
+function withTimeout(promise, milliseconds, message) {
+  let timer;
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      timer = window.setTimeout(() => reject(new Error(message)), milliseconds);
+    }),
+  ]).finally(() => window.clearTimeout(timer));
+}
+
 function readStoredSession() {
   try {
     const value = JSON.parse(sessionStorage.getItem(SESSION_KEY));
@@ -177,7 +187,11 @@ async function initializeAuthentication() {
 
       const profileReference = doc(db, "users", user.uid);
       try {
-        const snapshot = await getDoc(profileReference);
+        const snapshot = await withTimeout(
+          getDoc(profileReference),
+          20000,
+          "Firebase did not return your access profile. Check your connection and refresh the page.",
+        );
         if (!snapshot.exists()) {
           await setDoc(profileReference, {
             uid: user.uid,
