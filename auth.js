@@ -11,10 +11,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-auth.js";
 import {
   doc,
-  getDoc,
   onSnapshot,
-  serverTimestamp,
-  setDoc,
 } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-firestore.js";
 import { auth as firebaseAuth, db } from "./firebase-services.js";
 
@@ -40,6 +37,54 @@ function withTimeout(promise, milliseconds, message) {
       timer = window.setTimeout(() => reject(new Error(message)), milliseconds);
     }),
   ]).finally(() => window.clearTimeout(timer));
+}
+
+const PROFILE_ENDPOINT = "https://firestore.googleapis.com/v1/projects/emergency-app-f2850/databases/(default)/documents/users";
+const LEGACY_ROLES = { student: "Student", volunteer: "Volunteer", doctor: "Doctor", administrator: "Administrator" };
+
+function normalizeProfile(profile = {}) {
+  return {
+    ...profile,
+    role: ROLES.includes(profile.role) ? profile.role : LEGACY_ROLES[profile.role] || "Student",
+    status: profile.status === "suspended" ? "suspended" : "active",
+  };
+}
+
+function readRestValue(value) {
+  if (!value || typeof value !== "object") return undefined;
+  return value.stringValue ?? value.timestampValue ?? value.booleanValue ?? value.integerValue ?? value.doubleValue;
+}
+
+function profileFromRest(document) {
+  const values = Object.fromEntries(Object.entries(document?.fields || {}).map(([key, value]) => [key, readRestValue(value)]));
+  return normalizeProfile(values);
+}
+
+async function loadOrCreateProfile(user) {
+  const token = await user.getIdToken();
+  const endpoint = `${PROFILE_ENDPOINT}/${encodeURIComponent(user.uid)}`;
+  const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+  const existingResponse = await withTimeout(fetch(endpoint, { headers, cache: "no-store" }), 15000, "Firebase did not return your access profile. Check your connection and refresh the page.");
+  if (existingResponse.ok) return profileFromRest(await existingResponse.json());
+  if (existingResponse.status !== 404) throw new Error("Your Firebase access profile could not be read. Campus security rules may need to be published.");
+
+  const timestamp = new Date().toISOString();
+  const createdResponse = await withTimeout(fetch(endpoint, {
+    method: "PATCH",
+    headers,
+    body: JSON.stringify({ fields: {
+      uid: { stringValue: user.uid },
+      email: { stringValue: user.email || "" },
+      displayName: { stringValue: user.displayName || "Campus user" },
+      photoURL: { stringValue: user.photoURL || "" },
+      role: { stringValue: "Student" },
+      status: { stringValue: "active" },
+      createdAt: { timestampValue: timestamp },
+      updatedAt: { timestampValue: timestamp },
+    } }),
+  }), 15000, "Firebase did not create your access profile. Check your connection and refresh the page.");
+  if (!createdResponse.ok) throw new Error("Your Firebase access profile could not be created. Campus security rules may need to be published.");
+  return profileFromRest(await createdResponse.json());
 }
 
 function readStoredSession() {
@@ -187,38 +232,12 @@ async function initializeAuthentication() {
 
       const profileReference = doc(db, "users", user.uid);
       try {
-        const snapshot = await withTimeout(
-          getDoc(profileReference),
-          20000,
-          "Firebase did not return your access profile. Check your connection and refresh the page.",
-        );
-        if (!snapshot.exists()) {
-          await setDoc(profileReference, {
-            uid: user.uid,
-            email: user.email || "",
-            displayName: user.displayName || "Campus user",
-            photoURL: user.photoURL || "",
-            role: "Student",
-            status: "active",
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          });
-        } else {
-          const existing = snapshot.data();
-          const legacyRoles = { student: "Student", volunteer: "Volunteer", doctor: "Doctor", administrator: "Administrator" };
-          const normalizedRole = ROLES.includes(existing.role) ? existing.role : legacyRoles[existing.role] || "Student";
-          await setDoc(profileReference, {
-            email: user.email || "",
-            displayName: user.displayName || "Campus user",
-            photoURL: user.photoURL || "",
-            role: normalizedRole,
-            status: existing.status === "suspended" ? "suspended" : "active",
-            lastSeenAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          }, { merge: true });
-        }
+        currentProfile = await loadOrCreateProfile(user);
+        authStateReady = true;
+        resolveReady();
+        emitAuthState(redirectError);
         unsubscribeProfile = onSnapshot(profileReference, (profileSnapshot) => {
-          currentProfile = profileSnapshot.exists() ? profileSnapshot.data() : null;
+          currentProfile = profileSnapshot.exists() ? normalizeProfile(profileSnapshot.data()) : currentProfile;
           authStateReady = true;
           resolveReady();
           emitAuthState(redirectError);
