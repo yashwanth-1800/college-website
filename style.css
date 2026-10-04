@@ -158,3 +158,48 @@ input[aria-invalid="true"],select[aria-invalid="true"] { border:2px solid var(--
   .incident-timeline li:not(:last-child)::after { top:.85rem; right:auto; bottom:-.65rem; left:.39rem; width:2px; height:auto; }
   .timeline-marker { margin:0; }
 }
+
+/* Production workflow additions */
+.assigned-role-panel { margin:0 0 1rem; border:1px solid #91bba0; border-radius:.6rem; background:var(--green-bg); padding:.85rem; }
+.assigned-role-panel strong,.assigned-role-panel small { display:block; }
+.assigned-role-panel small { margin-top:.2rem; color:var(--muted); }
+.connection-state { display:inline-flex; min-height:2rem; align-items:center; border-radius:999px; padding:.35rem .65rem; background:#e8eef4; color:#324e65; font-size:.76rem; font-weight:850; white-space:nowrap; }
+.connection-online { background:var(--green-bg); color:var(--green); }
+.connection-offline,.connection-error { background:var(--amber-bg); color:var(--amber); }
+.location-actions { display:flex; align-items:center; gap:.75rem; margin-top:.85rem; }
+.location-actions .field-help { margin:0; }
+input[type="file"] { min-height:auto; border:1px dashed #7892a6; background:#fff; padding:.8rem; }
+.card-actions { display:flex; flex-wrap:wrap; gap:.55rem; margin-top:1rem; border-top:1px solid var(--border); padding-top:1rem; }
+.card-actions button { flex:1 1 10rem; }
+.report-details a { color:var(--blue-dark); font-weight:750; }
+.audit-dialog { width:min(calc(100% - 1rem),46rem); max-height:85vh; border:1px solid var(--border); border-radius:.8rem; background:#fff; color:var(--text); box-shadow:0 20px 70px rgba(16,42,67,.25); padding:1.1rem; }
+.audit-dialog::backdrop { background:rgba(8,25,40,.62); }
+.dialog-heading { display:flex; align-items:center; justify-content:space-between; gap:1rem; position:sticky; top:-1.1rem; z-index:2; background:#fff; padding:.25rem 0 .75rem; }
+.audit-content { display:grid; gap:.7rem; }
+.audit-event { border-left:4px solid var(--blue); border-radius:.35rem; background:#f4f8fb; padding:.75rem; }
+.audit-event strong,.audit-event span { display:block; }
+.audit-event span { color:var(--muted); font-size:.78rem; }
+.audit-event p { margin:.35rem 0 0; }
+.responder-note { border-left-color:var(--purple); background:var(--purple-bg); }
+.sla-row { display:flex; justify-content:space-between; gap:1rem; border-bottom:1px solid var(--border); padding:.55rem 0; }
+.sla-row:last-child { border-bottom:0; }
+.campus-map-card { grid-column:1 / -1; }
+.campus-map { position:relative; min-height:18rem; overflow:hidden; border:1px solid #9eb5c6; border-radius:.65rem; background:linear-gradient(135deg,#e6f0e7,#e5eff6); }
+.campus-map::before,.campus-map::after { position:absolute; background:rgba(255,255,255,.72); content:""; transform:rotate(-12deg); }
+.campus-map::before { top:45%; left:-5%; width:110%; height:2.4rem; }
+.campus-map::after { top:-10%; left:48%; width:2rem; height:120%; transform:rotate(18deg); }
+.map-campus-label { position:absolute; top:.7rem; left:.7rem; z-index:2; border-radius:.35rem; background:rgba(255,255,255,.9); padding:.35rem .5rem; color:var(--navy); font-size:.75rem; font-weight:800; }
+.map-marker { position:absolute; z-index:3; display:grid; width:2rem; height:2rem; place-items:center; transform:translate(-50%,-50%); border:3px solid #fff; border-radius:50%; color:#fff; font-size:.75rem; font-weight:900; box-shadow:0 3px 10px rgba(16,42,67,.3); }
+.map-critical { width:2.5rem; height:2.5rem; background:#8f1d15; }
+.map-high { background:#b94d00; }.map-medium { background:#a56b00; }.map-low { background:var(--green); }
+.user-access-list { display:grid; gap:.65rem; }
+.user-access-row { display:grid; grid-template-columns:minmax(0,1fr) minmax(10rem,14rem); align-items:end; gap:1rem; border:1px solid var(--border); border-radius:.55rem; background:#fff; padding:.75rem; }
+.user-access-row strong,.user-access-row span { display:block; overflow-wrap:anywhere; }
+.user-access-row span { color:var(--muted); font-size:.82rem; }
+.user-access-row label { margin:0; }
+@media (max-width:620px) {
+  .location-actions,.dialog-heading { align-items:stretch; flex-direction:column; }
+  .user-access-row { grid-template-columns:1fr; }
+  .audit-dialog { width:calc(100% - .5rem); }
+}
+

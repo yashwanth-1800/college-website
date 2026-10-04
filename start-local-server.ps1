@@ -1,6 +1,6 @@
-param([int]$Port = 8080)
+param([int]$Port = 8080, [string]$Root = $PSScriptRoot)
 
-$root = [System.IO.Path]::GetFullPath($PSScriptRoot)
+$root = [System.IO.Path]::GetFullPath($Root)
 $listener = [System.Net.HttpListener]::new()
 $listener.Prefixes.Add("http://localhost:$Port/")
 try { $listener.Start() } catch { Write-Error "Could not start http://localhost:$Port. Try: .\start-local-server.ps1 -Port 8081"; exit 1 }
@@ -17,3 +17,4 @@ try {
     $context.Response.ContentLength64 = $bytes.Length; $context.Response.OutputStream.Write($bytes, 0, $bytes.Length); $context.Response.Close()
   }
 } finally { $listener.Close() }
+

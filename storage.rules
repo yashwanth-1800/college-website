@@ -1,0 +1,17 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() { return request.auth != null; }
+    function profile() { return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data; }
+    function report(reportId) { return firestore.get(/databases/(default)/documents/reports/$(reportId)).data; }
+    function canRead(reportId) { return signedIn() && (report(reportId).submittedByUid == request.auth.uid || profile().role == 'Volunteer' || (profile().role == 'Doctor' && report(reportId).emergencyType == 'Medical') || profile().role == 'Administrator'); }
+    match /reports/{reportId}/{fileName} {
+      allow read: if canRead(reportId);
+      allow create: if signedIn() && profile().role == 'Student' && report(reportId).submittedByUid == request.auth.uid
+        && request.resource.size <= 10 * 1024 * 1024
+        && request.resource.contentType.matches('(image/(jpeg|png|webp)|audio/(mpeg|webm)|application/pdf)');
+      allow update, delete: if false;
+    }
+  }
+}
+

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="A smart campus emergency response platform with priority classification, AI-assisted summaries, timelines, and operational analytics." />
     <title>Campus Emergency Response</title>
-    <link rel="stylesheet" href="style.css?v=older-google-1" />
+    <link rel="stylesheet" href="style.css?v=production-1" />
   </head>
   <body>
     <header class="site-header">
@@ -33,8 +33,8 @@
         <div class="login-intro">
           <p class="eyebrow">Secure access</p>
           <h2 id="login-heading">Sign in to continue</h2>
-          <p>Use your Google account, then choose the dashboard you need for this prototype.</p>
-          <p class="prototype-help">This role choice is for demonstration only. A production system must verify roles on a secure server.</p>
+          <p>Use your Google account to open the workspace assigned by campus safety administration.</p>
+          <p class="prototype-help">Roles and data permissions are enforced by Firebase Security Rules. New accounts begin as Students.</p>
         </div>
 
         <div class="panel login-card">
@@ -59,8 +59,13 @@
           </div>
 
           <form id="login-form" novalidate>
-            <fieldset id="role-selection" class="role-fieldset" disabled>
-              <legend>2. Choose your dashboard <span aria-hidden="true">*</span></legend>
+            <div id="assigned-role-panel" class="assigned-role-panel" hidden>
+              <span class="signed-in-label">Assigned workspace</span>
+              <strong id="assigned-role"></strong>
+              <small>Contact an administrator if this access is incorrect.</small>
+            </div>
+            <fieldset id="role-selection" class="role-fieldset" disabled hidden>
+              <legend>Assigned dashboard</legend>
               <label class="role-card">
                 <input type="radio" name="login-role" value="Student" />
                 <span><strong>Student</strong><small>Submit emergencies and view your own reports.</small></span>
@@ -79,7 +84,7 @@
               </label>
             </fieldset>
             <p id="login-role-error" class="field-error" role="alert"></p>
-            <button id="login-button" class="primary-button" type="submit" disabled>Continue to dashboard</button>
+            <button id="login-button" class="primary-button" type="submit" disabled>Open assigned dashboard</button>
           </form>
         </div>
       </section>
@@ -91,10 +96,12 @@
             <h2 id="dashboard-heading">Emergency dashboard</h2>
           </div>
           <div class="user-actions">
+            <span id="connection-state" class="connection-state">Connecting…</span>
             <p id="current-user" class="current-role"></p>
+            <button id="notification-button" class="secondary-button" type="button">Enable alerts</button>
             <button id="logout-button" class="secondary-button" type="button">Sign out</button>
           </div>
-          <p class="security-note">Prototype notice: Google verifies the signed-in account, but the dashboard role choice is not security. Real deployment requires backend authentication, server-side role authorization, secure database storage, audit logs, and appropriate privacy controls.</p>
+          <p class="security-note">Production controls: shared Firestore data, server-enforced roles, immutable audit events, protected attachments, and human-reviewed AI recommendations. For an immediate danger, contact the campus emergency number directly.</p>
         </section>
 
         <aside class="intelligence-status" aria-label="Smart incident intelligence status">
@@ -155,6 +162,10 @@
                   <input id="area" maxlength="80" placeholder="Example: Lab 402" autocomplete="off" />
                 </div>
               </div>
+              <div class="location-actions">
+                <button id="location-button" class="secondary-button" type="button">Use my current location</button>
+                <span id="location-coordinate-status" class="field-help">GPS is optional and is shared only with authorized responders.</span>
+              </div>
               <p id="location-error" class="field-error" role="alert"></p>
             </fieldset>
 
@@ -167,6 +178,14 @@
               <textarea id="description" minlength="5" maxlength="300" aria-describedby="description-help description-error character-count" required></textarea>
               <p id="description-help" class="field-help">State what is happening in 5 to 300 characters. Avoid private information unless essential.</p>
               <p id="description-error" class="field-error" role="alert"></p>
+            </div>
+
+            <div class="field-group quick-step-panel">
+              <p class="step-label">Optional evidence</p>
+              <label for="attachment">Photo, audio, or PDF attachment</label>
+              <input id="attachment" type="file" accept="image/jpeg,image/png,image/webp,audio/mpeg,audio/webm,application/pdf" />
+              <p id="attachment-help" class="field-help">Maximum 10 MB. Do not upload private information unless it is essential for the response.</p>
+              <p id="attachment-error" class="field-error" role="alert"></p>
             </div>
 
             <div class="submit-row">
@@ -200,7 +219,7 @@
           <section id="admin-analytics" class="analytics-panel" aria-labelledby="analytics-heading" hidden>
             <div class="section-heading">
               <div><p class="eyebrow">Operational intelligence</p><h2 id="analytics-heading">Emergency analytics</h2></div>
-              <p class="required-note">Calculated from stored incidents</p>
+              <p class="required-note">Live, privacy-aware operational data</p>
             </div>
             <div id="analytics-metrics" class="analytics-metrics"></div>
             <div class="analytics-grid">
@@ -208,7 +227,17 @@
               <article class="analytics-card"><h3>Incidents by location</h3><div id="location-chart" class="bar-chart"></div></article>
               <article class="analytics-card"><h3>7-day incident trend</h3><div id="trend-chart" class="bar-chart"></div></article>
               <article class="analytics-card hotspot-card"><h3>Recurring incident area</h3><div id="hotspot-result"></div></article>
+              <article class="analytics-card"><h3>Response SLA health</h3><div id="sla-result"></div></article>
+              <article class="analytics-card campus-map-card"><h3>Campus incident map</h3><div id="campus-map" class="campus-map" aria-label="Approximate campus incident map"></div></article>
             </div>
+          </section>
+          <section id="access-management" class="analytics-panel" aria-labelledby="access-heading" hidden>
+            <div class="section-heading">
+              <div><p class="eyebrow">Server-enforced access</p><h2 id="access-heading">Role management</h2></div>
+              <p class="required-note">Changes take effect immediately</p>
+            </div>
+            <p class="field-help">New Google accounts begin as Students. Assign trusted responders only after their identity has been verified.</p>
+            <div id="user-access-list" class="user-access-list"></div>
           </section>
           <p id="workflow-note" class="workflow-note"></p>
           <div id="filters" class="filters" aria-label="Report filters"></div>
@@ -216,6 +245,11 @@
         </section>
       </section>
     </main>
+
+    <dialog id="audit-dialog" class="audit-dialog" aria-labelledby="audit-heading">
+      <div class="dialog-heading"><h2 id="audit-heading">Incident history</h2><button id="audit-close" class="secondary-button" type="button">Close</button></div>
+      <div id="audit-content" class="audit-content"></div>
+    </dialog>
 
     <script type="module">
       // OAuth providers cannot run from file://. Opening this file locally therefore
@@ -228,3 +262,4 @@
     </script>
   </body>
 </html>
+

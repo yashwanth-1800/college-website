@@ -1,4 +1,3 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-app.js";
 import {
   GoogleAuthProvider,
   browserLocalPersistence,
@@ -10,24 +9,23 @@ import {
   signInWithRedirect,
   signOut,
 } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-auth.js";
+import {
+  doc,
+  getDoc,
+  onSnapshot,
+  serverTimestamp,
+  setDoc,
+} from "https://www.gstatic.com/firebasejs/11.8.1/firebase-firestore.js";
+import { auth as firebaseAuth, db } from "./firebase-services.js";
 
 const usesSameOriginRedirect = window.location.hostname.endsWith(".vercel.app");
 const VERCEL_AUTH_DOMAIN = usesSameOriginRedirect ? window.location.hostname : "";
-const firebaseConfig = {
-  apiKey: "AIzaSyD7NMp66LLaZYi_5uqbrbU-SFCJRCRyTmY",
-  authDomain: usesSameOriginRedirect ? VERCEL_AUTH_DOMAIN : "emergency-app-f2850.firebaseapp.com",
-  projectId: "emergency-app-f2850",
-  storageBucket: "emergency-app-f2850.firebasestorage.app",
-  messagingSenderId: "206775317622",
-  appId: "1:206775317622:web:8b051ba2dfe92858ca1b57",
-};
-
 const SESSION_KEY = "campusEmergencySession";
 const ROLES = ["Student", "Volunteer", "Doctor", "Administrator"];
-const app = initializeApp(firebaseConfig);
-const firebaseAuth = getAuth(app);
 
 let currentUser = null;
+let currentProfile = null;
+let unsubscribeProfile = null;
 let authStateReady = false;
 let resolveReady;
 const readyPromise = new Promise((resolve) => {
@@ -61,28 +59,21 @@ function clearStoredSession() {
 }
 
 function getSession() {
-  const storedSession = readStoredSession();
-  if (!currentUser || !storedSession || storedSession.uid !== currentUser.uid) return null;
-  return storedSession;
-}
-
-function chooseRole(role) {
-  if (!currentUser || !ROLES.includes(role)) return null;
-
-  const session = {
+  if (!currentUser || !currentProfile || currentProfile.status !== "active" || !ROLES.includes(currentProfile.role)) return null;
+  return {
     uid: currentUser.uid,
     email: currentUser.email || "Google account",
     name: currentUser.displayName || currentUser.email || "Google user",
-    role,
-    timestamp: new Date().toISOString(),
+    role: currentProfile.role,
+    timestamp: currentProfile.updatedAt?.toDate?.()?.toISOString?.() || new Date().toISOString(),
   };
+}
 
-  try {
-    sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
-    return session;
-  } catch {
-    return null;
-  }
+function chooseRole(role) {
+  // The selected browser control is no longer an authority. Firestore supplies
+  // the assigned role and Security Rules enforce it for every data operation.
+  if (!ROLES.includes(role) || role !== currentProfile?.role) return null;
+  return getSession();
 }
 
 function publicUser(user) {
@@ -98,7 +89,7 @@ function publicUser(user) {
 function emitAuthState(error = "") {
   window.dispatchEvent(
     new CustomEvent("google-auth-state", {
-      detail: { ready: authStateReady, user: publicUser(currentUser), error },
+      detail: { ready: authStateReady, user: publicUser(currentUser), profile: currentProfile, error },
     }),
   );
 }
@@ -132,6 +123,9 @@ async function signInWithGoogle() {
 
 async function logout() {
   clearStoredSession();
+  unsubscribeProfile?.();
+  unsubscribeProfile = null;
+  currentProfile = null;
   await signOut(firebaseAuth);
 }
 
@@ -139,6 +133,8 @@ window.Auth = {
   chooseRole,
   getSession,
   getUser: () => publicUser(currentUser),
+  getProfile: () => currentProfile,
+  getIdToken: async () => currentUser?.getIdToken() || "",
   isReady: () => authStateReady,
   logout,
   roles: [...ROLES],
@@ -166,12 +162,62 @@ async function initializeAuthentication() {
 
   onAuthStateChanged(
     firebaseAuth,
-    (user) => {
+    async (user) => {
+      unsubscribeProfile?.();
+      unsubscribeProfile = null;
       currentUser = user;
-      authStateReady = true;
-      if (!user) clearStoredSession();
-      resolveReady();
-      emitAuthState(redirectError);
+      currentProfile = null;
+      if (!user) {
+        clearStoredSession();
+        authStateReady = true;
+        resolveReady();
+        emitAuthState(redirectError);
+        return;
+      }
+
+      const profileReference = doc(db, "users", user.uid);
+      try {
+        const snapshot = await getDoc(profileReference);
+        if (!snapshot.exists()) {
+          await setDoc(profileReference, {
+            uid: user.uid,
+            email: user.email || "",
+            displayName: user.displayName || "Campus user",
+            photoURL: user.photoURL || "",
+            role: "Student",
+            status: "active",
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+        } else {
+          const existing = snapshot.data();
+          const legacyRoles = { student: "Student", volunteer: "Volunteer", doctor: "Doctor", administrator: "Administrator" };
+          const normalizedRole = ROLES.includes(existing.role) ? existing.role : legacyRoles[existing.role] || "Student";
+          await setDoc(profileReference, {
+            email: user.email || "",
+            displayName: user.displayName || "Campus user",
+            photoURL: user.photoURL || "",
+            role: normalizedRole,
+            status: existing.status === "suspended" ? "suspended" : "active",
+            lastSeenAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          }, { merge: true });
+        }
+        unsubscribeProfile = onSnapshot(profileReference, (profileSnapshot) => {
+          currentProfile = profileSnapshot.exists() ? profileSnapshot.data() : null;
+          authStateReady = true;
+          resolveReady();
+          emitAuthState(redirectError);
+        }, (error) => {
+          authStateReady = true;
+          resolveReady();
+          emitAuthState(`Your access profile could not be loaded: ${error.message}`);
+        });
+      } catch (error) {
+        authStateReady = true;
+        resolveReady();
+        emitAuthState(`Your secure profile could not be initialized: ${error?.message || "Unknown error"}`);
+      }
     },
     () => {
       currentUser = null;
@@ -184,3 +230,4 @@ async function initializeAuthentication() {
 }
 
 initializeAuthentication();
+

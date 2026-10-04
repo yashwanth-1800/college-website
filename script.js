@@ -43,6 +43,11 @@ let reportSubmissionInProgress = false;
 let googleSignInInProgress = false;
 let appStarted = false;
 let trackedReportId = "";
+let capturedCoordinates = null;
+let reportSubscription = null;
+let userSubscription = null;
+let subscribedSessionKey = "";
+let managedUsers = [];
 
 function showMessage(selector, message, kind = "success") {
   const element = $(selector);
@@ -119,19 +124,22 @@ function route() {
   }
   loginView.hidden = true;
   dashboardView.hidden = false;
+  startRealtimeData(session);
   renderDashboard();
   if (persistenceWarning) showMessage("#app-status", persistenceWarning, "error");
 }
 
-function syncLoginView(user, error = "") {
+function syncLoginView(user, error = "", profile = window.Auth?.getProfile?.()) {
   $("#google-signin-section").hidden = Boolean(user);
   $("#google-user-panel").hidden = !user;
-  $("#role-selection").disabled = !user;
-  $("#login-button").disabled = !user;
+  $("#role-selection").hidden = true;
+  $("#assigned-role-panel").hidden = !user || !profile?.role;
+  $("#assigned-role").textContent = profile?.role ? `${profile.role} dashboard` : "Access profile loading…";
+  $("#login-button").disabled = !user || !profile?.role;
   if (user) {
     $("#google-user-name").textContent = user.name;
     $("#google-user-email").textContent = user.email;
-    showMessage("#login-status", error || "Google sign-in successful. Choose your dashboard.");
+    showMessage("#login-status", error || (profile?.role ? "Google sign-in successful. Your assigned workspace is ready." : "Creating your secure access profile…"));
   } else {
     $("#google-user-name").textContent = "";
     $("#google-user-email").textContent = "";
@@ -158,19 +166,44 @@ function handleDashboardLogin() {
     showMessage("#login-status", "Sign in with Google before choosing a dashboard.", "error");
     return;
   }
-  const selectedRole = $("input[name='login-role']:checked")?.value;
-  if (!selectedRole) {
-    $("#login-role-error").textContent = "Select a dashboard role.";
-    return;
-  }
-  const session = window.Auth.chooseRole(selectedRole);
+  const assignedRole = window.Auth.getProfile?.()?.role;
+  const session = window.Auth.chooseRole(assignedRole);
   if (!session) {
-    showMessage("#login-status", "Your dashboard session could not be saved. Check browser storage settings.", "error");
+    showMessage("#login-status", "Your assigned role is not available. Ask a campus administrator to review your access.", "error");
     return;
   }
   filters = { priority: "All", status: "All", helperStatus: "All", emergencyType: "All" };
   showMessage("#login-status", `Opening the ${session.role} dashboard.`);
   location.hash = dashboardRoute(session.role);
+}
+
+function startRealtimeData(session) {
+  const key = `${session.uid}:${session.role}`;
+  if (subscribedSessionKey === key) return;
+  reportSubscription?.();
+  userSubscription?.();
+  subscribedSessionKey = key;
+  $("#connection-state").textContent = navigator.onLine ? "Connecting…" : "Offline";
+  reportSubscription = window.Data.subscribeReports((nextReports) => {
+    reports = nextReports;
+    renderDashboard();
+  }, (state) => {
+    const indicator = $("#connection-state");
+    if (state.error) {
+      indicator.textContent = "Sync error";
+      indicator.className = "connection-state connection-error";
+      showMessage("#app-status", `Shared reports could not synchronize: ${state.error}`, "error");
+      return;
+    }
+    indicator.textContent = state.pendingWrites ? "Saving…" : state.online ? `Live · ${state.source}` : "Offline · changes queued";
+    indicator.className = `connection-state ${state.online ? "connection-online" : "connection-offline"}`;
+  });
+  if (session.role === "Administrator") {
+    userSubscription = window.Data.subscribeUsers((users) => {
+      managedUsers = users;
+      renderAccessManagement();
+    }, (error) => showMessage("#app-status", `Role directory could not load: ${error.message}`, "error"));
+  }
 }
 
 function generateReportId() {
@@ -234,6 +267,16 @@ function validateReportForm() {
   $("#building").setAttribute("aria-invalid", !building ? "true" : "false");
   $("#floor").setAttribute("aria-invalid", !floor ? "true" : "false");
   if (locationError) isValid = false;
+  const attachment = $("#attachment").files?.[0];
+  const allowedTypes = ["image/jpeg", "image/png", "image/webp", "audio/mpeg", "audio/webm", "application/pdf"];
+  const attachmentError = attachment && !allowedTypes.includes(attachment.type)
+    ? "Use a JPG, PNG, WebP, MP3, WebM, or PDF file."
+    : attachment && attachment.size > 10 * 1024 * 1024
+      ? "Attachment must be 10 MB or smaller."
+      : "";
+  $("#attachment-error").textContent = attachmentError;
+  $("#attachment").setAttribute("aria-invalid", attachmentError ? "true" : "false");
+  if (attachmentError) isValid = false;
   return isValid;
 }
 
@@ -311,40 +354,38 @@ function createIncidentSummary(report) {
   return section;
 }
 
-function updateHelperStatus(reportId, helperStatus) {
+async function updateHelperStatus(reportId, helperStatus) {
   if (!isAllowed("updateHelper")) return showMessage("#app-status", "Only volunteers can update helper tasks.", "error");
   if (!HELPER_STATUSES.includes(helperStatus)) return showMessage("#app-status", "That helper task status is not valid.", "error");
   if (!reports.some((report) => report.id === reportId)) return showMessage("#app-status", "That incident is no longer available.", "error");
-  const now = new Date().toISOString();
-  const nextReports = reports.map((report) => report.id === reportId ? { ...report, helperStatus, helperUpdatedAt: now, updatedAt: now } : report);
-  if (saveReports(nextReports)) {
+  try {
+    await window.Data.updateHelperStatus(reportId, helperStatus);
     showMessage("#app-status", `Volunteer task for ${reportId} updated to ${helperStatus}.`);
-    renderDashboard();
+  } catch (error) {
+    showMessage("#app-status", error.message || "The volunteer task could not be updated.", "error");
   }
 }
 
-function overridePriority(reportId, priority) {
+async function overridePriority(reportId, priority) {
   if (!isAllowed("overridePriority")) return showMessage("#app-status", "Only administrators can override incident priority.", "error");
   if (!PRIORITIES.includes(priority)) return showMessage("#app-status", "That priority is not valid.", "error");
   const report = reports.find((item) => item.id === reportId);
   if (!report) return showMessage("#app-status", "That incident is no longer available.", "error");
   if (report.priority === priority) return showMessage("#app-status", `${reportId} is already ${priority.toUpperCase()} priority.`);
-  const now = new Date().toISOString();
-  const nextReports = reports.map((item) => item.id === reportId ? {
-    ...item,
+  try {
+    await window.Data.mutateReport(reportId, {
     priority,
     priorityOverridden: true,
-    priorityOverrideAt: now,
-    updatedAt: now,
+    priorityOverrideAt: new Date().toISOString(),
     severity: priorityToSeverity(priority),
-  } : item);
-  if (saveReports(nextReports)) {
+  }, "priority.overridden", `Priority changed from ${report.priority} to ${priority}`, { fromPriority: report.priority, toPriority: priority });
     showMessage("#app-status", `${reportId} priority changed to ${priority.toUpperCase()} by an administrator.`);
-    renderDashboard();
+  } catch (error) {
+    showMessage("#app-status", error.message || "Priority could not be updated.", "error");
   }
 }
 
-function updateIncidentStatus(reportId, targetStatus) {
+async function updateIncidentStatus(reportId, targetStatus) {
   if (!isAllowed("updateStatus")) return showMessage("#app-status", "Only administrators can update the incident response status.", "error");
   const report = reports.find((item) => item.id === reportId);
   if (!report) return showMessage("#app-status", "That incident is no longer available.", "error");
@@ -352,21 +393,20 @@ function updateIncidentStatus(reportId, targetStatus) {
   if (targetStatus === "Resolved" && !window.confirm(`Mark incident ${reportId} as resolved?`)) return;
   const now = new Date().toISOString();
   const timestampField = STATUS_TIMESTAMP_FIELDS[targetStatus];
-  const nextReports = reports.map((item) => item.id === reportId ? {
-    ...item,
+  try {
+    await window.Data.mutateReport(reportId, {
     status: targetStatus,
     [timestampField]: now,
-    updatedAt: now,
     reportStatus: targetStatus === "Resolved" ? "Resolved" : "Pending",
-    resolvedBy: targetStatus === "Resolved" ? "Administrator" : item.resolvedBy,
-  } : item);
-  if (saveReports(nextReports)) {
+    ...(targetStatus === "Resolved" ? { resolvedBy: "Administrator" } : {}),
+  }, "incident.status", `Incident advanced from ${report.status} to ${targetStatus}`, { fromStatus: report.status, toStatus: targetStatus });
     showMessage("#app-status", `${reportId} moved to ${targetStatus.toUpperCase()}.`);
-    renderDashboard();
+  } catch (error) {
+    showMessage("#app-status", error.message || "Incident status could not be updated.", "error");
   }
 }
 
-function resolveMedicalReport(reportId) {
+async function resolveMedicalReport(reportId) {
   if (!isAllowed("resolveMedical")) return showMessage("#app-status", "Only doctors can resolve medical cases.", "error");
   const report = reports.find((item) => item.id === reportId);
   if (!report) return showMessage("#app-status", "That incident is no longer available.", "error");
@@ -374,17 +414,16 @@ function resolveMedicalReport(reportId) {
   if (report.status === "Resolved") return showMessage("#app-status", "This incident has already been resolved.", "error");
   if (!window.confirm(`Mark medical incident ${reportId} as resolved?`)) return;
   const now = new Date().toISOString();
-  const nextReports = reports.map((item) => item.id === reportId ? {
-    ...item,
+  try {
+    await window.Data.mutateReport(reportId, {
     status: "Resolved",
     reportStatus: "Resolved",
     resolvedBy: "Doctor",
     resolvedAt: now,
-    updatedAt: now,
-  } : item);
-  if (saveReports(nextReports)) {
+  }, "medical.resolved", "Medical incident resolved by a doctor", { fromStatus: report.status, toStatus: "Resolved" });
     showMessage("#app-status", `Medical incident ${reportId} resolved.`);
-    renderDashboard();
+  } catch (error) {
+    showMessage("#app-status", error.message || "The medical incident could not be resolved.", "error");
   }
 }
 
@@ -419,6 +458,98 @@ function createAdminControls(report) {
   return controls;
 }
 
+function createActionButton(label, className, handler) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = className;
+  button.textContent = label;
+  button.addEventListener("click", handler);
+  return button;
+}
+
+async function showAuditHistory(reportId) {
+  const dialog = $("#audit-dialog");
+  const content = $("#audit-content");
+  $("#audit-heading").textContent = `Incident history · ${reportId}`;
+  content.replaceChildren();
+  const loading = document.createElement("p");
+  loading.textContent = "Loading verified audit events…";
+  content.append(loading);
+  dialog.showModal();
+  try {
+    const [events, notes] = await Promise.all([
+      window.Data.getAuditHistory(reportId),
+      window.Data.getResponderNotes(reportId),
+    ]);
+    content.replaceChildren();
+    if (!events.length) {
+      const empty = document.createElement("p");
+      empty.className = "empty-state";
+      empty.textContent = "No cloud audit entries are available for this incident yet.";
+      content.append(empty);
+    }
+    events.forEach((event) => {
+      const item = document.createElement("article");
+      const heading = document.createElement("strong");
+      const meta = document.createElement("span");
+      const message = document.createElement("p");
+      item.className = "audit-event";
+      heading.textContent = event.action.replaceAll(".", " ");
+      meta.textContent = `${event.actorName || "System"} · ${event.actorRole || "System"} · ${formatTimestamp(event.createdAt)}`;
+      message.textContent = event.message || "Recorded update";
+      item.append(heading, meta, message);
+      content.append(item);
+    });
+    if (notes.length) {
+      const notesHeading = document.createElement("h3");
+      notesHeading.textContent = "Responder notes";
+      content.append(notesHeading);
+      notes.forEach((note) => {
+        const item = document.createElement("article");
+        item.className = "audit-event responder-note";
+        const text = document.createElement("p");
+        const meta = document.createElement("span");
+        text.textContent = note.note;
+        meta.textContent = `${note.authorName} · ${note.authorRole} · ${formatTimestamp(note.createdAt)}`;
+        item.append(text, meta);
+        content.append(item);
+      });
+    }
+  } catch (error) {
+    content.textContent = error.message || "Incident history could not be loaded.";
+  }
+}
+
+async function claimIncident(reportId) {
+  try {
+    await window.Data.claimReport(reportId);
+    showMessage("#app-status", `${reportId} is now assigned to you.`);
+  } catch (error) {
+    showMessage("#app-status", error.message || "The incident could not be claimed.", "error");
+  }
+}
+
+async function releaseIncident(reportId) {
+  if (!window.confirm(`Release your assignment to ${reportId}?`)) return;
+  try {
+    await window.Data.releaseReport(reportId);
+    showMessage("#app-status", `${reportId} is available for another volunteer.`);
+  } catch (error) {
+    showMessage("#app-status", error.message || "The assignment could not be released.", "error");
+  }
+}
+
+async function addIncidentNote(reportId) {
+  const note = window.prompt("Add an internal responder note (up to 500 characters):");
+  if (note === null) return;
+  try {
+    await window.Data.addResponderNote(reportId, note);
+    showMessage("#app-status", `Responder note added to ${reportId}.`);
+  } catch (error) {
+    showMessage("#app-status", error.message || "The responder note could not be added.", "error");
+  }
+}
+
 function createReportCard(report) {
   const role = getSession().role;
   const card = document.createElement("article");
@@ -445,13 +576,40 @@ function createReportCard(report) {
     createDetail("Description", report.description),
     createDetail("Last updated", formatTimestamp(report.updatedAt)),
     createDetail("Responder guidance", VOLUNTEER_GUIDANCE[report.priority]),
+    createDetail("Response target", reportSla(report).text),
   );
+  if (report.assignedVolunteerName) details.append(createDetail("Assigned volunteer", report.assignedVolunteerName));
+  if (report.escalatedAt) details.append(createDetail("Escalation", `${report.escalationReason || "Response target exceeded"} · ${formatTimestamp(report.escalatedAt)}`));
+  if (report.aiRecommendation) {
+    const confidence = Number(report.aiRecommendation.confidence);
+    details.append(createDetail("AI recommendation", `${report.aiRecommendation.rationale || "Human review required"}${Number.isFinite(confidence) ? ` · ${Math.round(confidence * 100)}% confidence` : ""}`));
+  }
+  if (Array.isArray(report.attachments) && report.attachments.length) {
+    const attachmentRow = document.createElement("div");
+    const term = document.createElement("dt");
+    const description = document.createElement("dd");
+    term.textContent = "Attachments";
+    report.attachments.forEach((attachment, index) => {
+      const link = document.createElement("a");
+      link.href = attachment.url;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.textContent = attachment.name || `Attachment ${index + 1}`;
+      description.append(link, document.createTextNode(index < report.attachments.length - 1 ? " · " : ""));
+    });
+    attachmentRow.className = "detail-row";
+    attachmentRow.append(term, description);
+    details.append(attachmentRow);
+  }
   if (role === "Administrator" && report.priorityOverridden) {
     details.append(createDetail("Priority review", `Original: ${report.originalPriority.toUpperCase()} · Manual override recorded`));
   }
   timelineHeading.className = "timeline-heading";
   timelineHeading.textContent = "Response timeline";
   card.append(topLine, createIncidentSummary(report), details, timelineHeading, createTimeline(report));
+  const actions = document.createElement("div");
+  actions.className = "card-actions";
+  actions.append(createActionButton("View audit history", "secondary-button", () => showAuditHistory(report.id)));
   if (role === "Student") {
     const responseNote = document.createElement("p");
     responseNote.className = "response-note";
@@ -459,6 +617,9 @@ function createReportCard(report) {
     card.append(responseNote);
   }
   if (role === "Volunteer") {
+    const session = getSession();
+    if (!report.assignedVolunteerUid) actions.append(createActionButton("Accept incident", "status-button", () => claimIncident(report.id)));
+    else if (report.assignedVolunteerUid === session.uid) actions.append(createActionButton("Release assignment", "secondary-button", () => releaseIncident(report.id)));
     const control = document.createElement("label");
     const label = document.createElement("span");
     const select = document.createElement("select");
@@ -472,6 +633,8 @@ function createReportCard(report) {
       select.append(option);
     });
     select.setAttribute("aria-label", `Update volunteer task for ${report.id}`);
+    select.disabled = report.assignedVolunteerUid !== session.uid;
+    if (select.disabled) select.title = report.assignedVolunteerUid ? "Only the assigned volunteer can update this task." : "Accept the incident before updating task progress.";
     select.addEventListener("change", () => updateHelperStatus(report.id, select.value));
     control.append(label, select);
     card.append(control);
@@ -484,6 +647,8 @@ function createReportCard(report) {
     resolveButton.addEventListener("click", () => resolveMedicalReport(report.id));
     card.append(resolveButton);
   }
+  if (["Volunteer", "Doctor", "Administrator"].includes(role)) actions.append(createActionButton("Add responder note", "secondary-button", () => addIncidentNote(report.id)));
+  card.append(actions);
   if (role === "Administrator") card.append(createAdminControls(report));
   return card;
 }
@@ -591,6 +756,125 @@ function renderAdminAnalytics() {
     empty.textContent = "No location has two or more incidents in the last 30 days.";
     hotspot.append(empty);
   }
+  renderSlaHealth();
+  renderCampusMap();
+}
+
+function responseTargetMinutes(priority) {
+  return { Critical: 5, High: 10, Medium: 20, Low: 45 }[priority] || 45;
+}
+
+function reportSla(report) {
+  if (report.status === "Resolved") return { state: "complete", text: "Resolved" };
+  const ageMinutes = Math.max(0, (Date.now() - new Date(report.createdAt).getTime()) / 60000);
+  const target = responseTargetMinutes(report.priority);
+  const remaining = Math.ceil(target - ageMinutes);
+  return remaining >= 0
+    ? { state: remaining <= Math.max(2, target * 0.25) ? "warning" : "healthy", text: `${remaining} min remaining` }
+    : { state: "breached", text: `${Math.abs(remaining)} min overdue` };
+}
+
+function renderSlaHealth() {
+  const container = $("#sla-result");
+  container.replaceChildren();
+  const active = reports.filter((report) => report.status !== "Resolved");
+  const counts = { healthy: 0, warning: 0, breached: 0 };
+  active.forEach((report) => { counts[reportSla(report).state] += 1; });
+  [["Within target", counts.healthy], ["Approaching target", counts.warning], ["Escalation required", counts.breached]].forEach(([label, value]) => {
+    const row = document.createElement("div");
+    row.className = "sla-row";
+    const text = document.createElement("span");
+    const number = document.createElement("strong");
+    text.textContent = label;
+    number.textContent = String(value);
+    row.append(text, number);
+    container.append(row);
+  });
+}
+
+const CAMPUS_POINTS = {
+  "Main Gate": [12, 78], "Administration Building": [31, 24], Library: [48, 42],
+  "Science Block": [68, 27], "Engineering Block": [76, 55], "Tech Park": [58, 72],
+  "Student Hostel": [25, 65], Cafeteria: [43, 62], "Sports Ground": [83, 82], "Parking Area": [14, 42], Other: [50, 50],
+};
+
+function renderCampusMap() {
+  const map = $("#campus-map");
+  map.replaceChildren();
+  const label = document.createElement("span");
+  label.className = "map-campus-label";
+  label.textContent = "SRM Campus · approximate operational view";
+  map.append(label);
+  reports.forEach((report) => {
+    const [x, y] = CAMPUS_POINTS[report.location?.building] || CAMPUS_POINTS.Other;
+    const marker = document.createElement("button");
+    marker.type = "button";
+    marker.className = `map-marker map-${report.priority.toLowerCase()}`;
+    marker.style.left = `${x}%`;
+    marker.style.top = `${y}%`;
+    marker.textContent = report.priority === "Critical" ? "!" : String(Math.max(1, reports.filter((item) => item.location?.building === report.location?.building).length));
+    marker.title = `${report.id}: ${report.emergencyType} at ${report.location?.building}`;
+    marker.setAttribute("aria-label", marker.title);
+    marker.addEventListener("click", () => {
+      trackedReportId = report.id;
+      showMessage("#app-status", `${report.id}: ${report.summary}`);
+    });
+    map.append(marker);
+  });
+}
+
+function renderAccessManagement() {
+  const container = $("#user-access-list");
+  if (!container || getSession()?.role !== "Administrator") return;
+  container.replaceChildren();
+  if (!managedUsers.length) {
+    const empty = document.createElement("p");
+    empty.className = "empty-state";
+    empty.textContent = "No user profiles are available yet.";
+    container.append(empty);
+    return;
+  }
+  managedUsers.forEach((user) => {
+    const row = document.createElement("article");
+    const identity = document.createElement("div");
+    const name = document.createElement("strong");
+    const email = document.createElement("span");
+    const label = document.createElement("label");
+    const select = document.createElement("select");
+    row.className = "user-access-row";
+    name.textContent = user.displayName || "Campus user";
+    email.textContent = user.email || user.uid;
+    identity.append(name, email);
+    label.textContent = "Assigned role";
+    ["Student", "Volunteer", "Doctor", "Administrator"].forEach((role) => {
+      const option = document.createElement("option");
+      option.value = role;
+      option.textContent = role;
+      option.selected = role === user.role;
+      select.append(option);
+    });
+    select.disabled = user.uid === getSession().uid;
+    select.addEventListener("change", async () => {
+      const requestedRole = select.value;
+      if (!window.confirm(`Assign ${requestedRole} access to ${user.displayName || user.email}?`)) {
+        select.value = user.role;
+        return;
+      }
+      select.disabled = true;
+      try {
+        await window.Data.setUserRole(user.uid, requestedRole);
+        showMessage("#app-status", `${user.displayName || user.email} now has ${requestedRole} access.`);
+      } catch (error) {
+        select.value = user.role;
+        showMessage("#app-status", error.message || "The role could not be assigned.", "error");
+      } finally {
+        select.disabled = false;
+      }
+    });
+    label.append(select);
+    row.append(identity, label);
+    container.append(row);
+  });
 }
 
 function renderTrackingResult() {
@@ -640,6 +924,7 @@ function renderDashboard() {
   $("#student-form-section").hidden = role !== "Student";
   $("#student-tracking-section").hidden = role !== "Student";
   $("#admin-analytics").hidden = role !== "Administrator";
+  $("#access-management").hidden = role !== "Administrator";
   $("#workflow-note").textContent = {
     Volunteer: "Update your assistance task as work progresses. Volunteers cannot change overall incident status or priority.",
     Doctor: "Doctors can review medical incidents and resolve medical cases. Administrator response progress remains visible.",
@@ -668,6 +953,7 @@ function renderDashboard() {
     summary.append(card);
   });
   if (role === "Administrator") renderAdminAnalytics();
+  if (role === "Administrator") renderAccessManagement();
   if (role === "Student") renderTrackingResult();
   const filterArea = $("#filters");
   filterArea.replaceChildren();
@@ -691,7 +977,7 @@ function renderDashboard() {
     .forEach((report) => reportList.append(createReportCard(report)));
 }
 
-function submitEmergencyReport(event) {
+async function submitEmergencyReport(event) {
   event.preventDefault();
   if (reportSubmissionInProgress || !isAllowed("submit") || !validateReportForm()) return;
   reportSubmissionInProgress = true;
@@ -705,16 +991,42 @@ function submitEmergencyReport(event) {
     building: $("#building").value,
     floor: $("#floor").value,
     area: $("#area").value.trim(),
+    coordinates: capturedCoordinates,
   };
   const emergencyType = $("#emergency-type").value;
   const description = $("#description").value.trim();
-  const priority = classifyPriority({ emergencyType, description, location: incidentLocation });
+  const rulePriority = classifyPriority({ emergencyType, description, location: incidentLocation });
+  let aiRecommendation = null;
+  try {
+    submitButton.textContent = "Analyzing safely…";
+    aiRecommendation = await window.Data.requestAiRecommendation({ emergencyType, description, location: incidentLocation });
+  } catch {
+    // Deterministic safety rules remain available if the server-side AI is not configured.
+  }
+  const priority = ["Critical", "High", "Medium", "Low"].includes(aiRecommendation?.priority)
+    ? (PRIORITIES.indexOf(aiRecommendation.priority) < PRIORITIES.indexOf(rulePriority) ? aiRecommendation.priority : rulePriority)
+    : rulePriority;
   const id = generateReportId();
   const report = migrateReport({
     id,
     emergencyType,
     description,
-    summary: summarizeDescription(description),
+    summary: aiRecommendation?.summary || summarizeDescription(description),
+    aiRecommendation: aiRecommendation ? {
+      ...aiRecommendation,
+      reviewed: false,
+      generatedAt: new Date().toISOString(),
+      model: aiRecommendation.model || "Vercel AI Gateway",
+    } : {
+      priority: rulePriority,
+      summary: summarizeDescription(description),
+      confidence: 1,
+      rationale: "Deterministic safety rules were used because server AI was unavailable.",
+      guidance: VOLUNTEER_GUIDANCE[rulePriority],
+      source: "deterministic-fallback",
+      reviewed: false,
+      generatedAt: new Date().toISOString(),
+    },
     priority,
     originalPriority: priority,
     priorityOverridden: false,
@@ -726,18 +1038,48 @@ function submitEmergencyReport(event) {
     helperStatus: "Not yet",
     submittedBy: session.email,
   });
-  if (report && saveReports([...reports, report])) {
+  try {
+    if (!report) throw new Error("The report could not be prepared safely.");
+    submitButton.textContent = "Saving incident…";
+    const attachment = $("#attachment").files?.[0] || null;
+    await window.Data.createReport(report, attachment);
     $("#emergency-form").reset();
     $("#campus").value = "SRM Campus";
     $("#character-count").textContent = "0 / 300";
     trackedReportId = report.id;
     $("#tracking-id").value = report.id;
-    showMessage("#app-status", `Emergency report submitted. Report ID: ${report.id}. Priority: ${report.priority.toUpperCase()}.`);
-    renderDashboard();
+    capturedCoordinates = null;
+    $("#location-coordinate-status").textContent = "GPS is optional and is shared only with authorized responders.";
+    showMessage("#app-status", `Emergency report submitted and synchronized. Report ID: ${report.id}. Priority: ${report.priority.toUpperCase()}.`);
+  } catch (error) {
+    showMessage("#app-status", error.message || "The report could not be saved.", "error");
   }
   reportSubmissionInProgress = false;
   submitButton.disabled = false;
   submitButton.textContent = "Report Emergency";
+}
+
+function captureLocation() {
+  const button = $("#location-button");
+  const status = $("#location-coordinate-status");
+  if (!navigator.geolocation) {
+    status.textContent = "Location services are not supported by this browser.";
+    return;
+  }
+  button.disabled = true;
+  status.textContent = "Requesting your location…";
+  navigator.geolocation.getCurrentPosition((position) => {
+    capturedCoordinates = {
+      latitude: Number(position.coords.latitude.toFixed(6)),
+      longitude: Number(position.coords.longitude.toFixed(6)),
+      accuracyMeters: Math.round(position.coords.accuracy),
+    };
+    status.textContent = `Location captured (accuracy approximately ${capturedCoordinates.accuracyMeters} m).`;
+    button.disabled = false;
+  }, () => {
+    status.textContent = "Location was not shared. You can still submit using the campus fields.";
+    button.disabled = false;
+  }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 });
 }
 
 function trackReport(event) {
@@ -753,12 +1095,30 @@ function trackReport(event) {
 
 async function signOutUser() {
   try {
+    reportSubscription?.();
+    userSubscription?.();
+    subscribedSessionKey = "";
     await window.Auth.logout();
     document.querySelectorAll("input[name='login-role']").forEach((input) => { input.checked = false; });
     trackedReportId = "";
     location.replace("#login");
   } catch {
     showMessage("#app-status", "Sign-out failed. Check your connection and try again.", "error");
+  }
+}
+
+async function enableNotifications() {
+  const button = $("#notification-button");
+  button.disabled = true;
+  try {
+    const result = await window.Data.requestNotifications();
+    button.textContent = result.browserOnly ? "Browser alerts enabled" : "Push alerts enabled";
+    showMessage("#app-status", result.browserOnly
+      ? "Browser alerts are enabled. Add the Firebase VAPID key to enable alerts when the app is closed."
+      : "Push notifications are enabled for this device.");
+  } catch (error) {
+    showMessage("#app-status", error.message || "Notifications could not be enabled.", "error");
+    button.disabled = false;
   }
 }
 
@@ -772,6 +1132,11 @@ async function startApp() {
   $("#description").addEventListener("input", () => { $("#character-count").textContent = `${$("#description").value.length} / 300`; });
   $("#emergency-form").addEventListener("submit", submitEmergencyReport);
   $("#tracking-form").addEventListener("submit", trackReport);
+  $("#location-button").addEventListener("click", captureLocation);
+  $("#notification-button").addEventListener("click", enableNotifications);
+  $("#audit-close").addEventListener("click", () => $("#audit-dialog").close());
+  window.addEventListener("online", () => { if (getSession()) startRealtimeData(getSession()); });
+  window.addEventListener("offline", () => { $("#connection-state").textContent = "Offline · changes queued"; });
   window.addEventListener("hashchange", route);
   window.addEventListener("storage", (event) => {
     if (event.key === STORAGE_KEY) {
@@ -779,15 +1144,20 @@ async function startApp() {
       if (getSession()) renderDashboard();
     }
   });
+  window.addEventListener("data-local-change", (event) => {
+    reports = Array.isArray(event.detail) ? event.detail : loadReports();
+    if (getSession()) renderDashboard();
+  });
   window.addEventListener("google-auth-progress", (event) => { showMessage("#login-status", event.detail || "Signing in with Google…"); });
   window.addEventListener("google-auth-state", (event) => {
-    syncLoginView(event.detail?.user || null, event.detail?.error || "");
+    syncLoginView(event.detail?.user || null, event.detail?.error || "", event.detail?.profile || null);
     route();
   });
   await window.Auth.whenReady();
-  syncLoginView(window.Auth.getUser());
+  syncLoginView(window.Auth.getUser(), "", window.Auth.getProfile?.());
   route();
 }
 
 if (window.Auth) startApp();
 else window.addEventListener("auth-module-ready", startApp, { once: true });
+

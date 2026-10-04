@@ -1,4 +1,12 @@
 {
+  "functions": {
+    "api/recommendation.js": { "maxDuration": 30 },
+    "api/notifications.js": { "maxDuration": 30 },
+    "api/escalations.js": { "maxDuration": 60 }
+  },
+  "crons": [
+    { "path": "/api/escalations", "schedule": "0 * * * *" }
+  ],
   "rewrites": [
     {
       "source": "/__/auth/:path*",
@@ -6,3 +14,4 @@
     }
   ]
 }
+

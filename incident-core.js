@@ -31,6 +31,13 @@
       building: cleanText(source.building || source.block, 80) || "Other",
       floor: cleanText(source.floor, 40) || "Not specified",
       area: cleanText(source.area || source.room, 80),
+      coordinates: source.coordinates && Number.isFinite(Number(source.coordinates.latitude)) && Number.isFinite(Number(source.coordinates.longitude))
+        ? {
+            latitude: Number(source.coordinates.latitude),
+            longitude: Number(source.coordinates.longitude),
+            accuracyMeters: Number(source.coordinates.accuracyMeters) || null,
+          }
+        : null,
     };
   }
 
@@ -136,7 +143,38 @@
       helperStatus,
       helperUpdatedAt: validIso(value.helperUpdatedAt),
       submittedBy: cleanText(value.submittedBy, 160) || "Student",
+      submittedByUid: cleanText(value.submittedByUid, 160),
+      submittedByName: cleanText(value.submittedByName, 160),
+      assignedVolunteerUid: cleanText(value.assignedVolunteerUid, 160) || null,
+      assignedVolunteerName: cleanText(value.assignedVolunteerName, 160) || null,
+      assignedVolunteerEmail: cleanText(value.assignedVolunteerEmail, 160) || null,
+      assignedAt: validIso(value.assignedAt),
+      helperUpdatedByUid: cleanText(value.helperUpdatedByUid, 160),
+      helperUpdatedByName: cleanText(value.helperUpdatedByName, 160),
       resolvedBy: cleanText(value.resolvedBy, 80),
+      escalatedAt: validIso(value.escalatedAt),
+      escalationReason: cleanText(value.escalationReason, 240),
+      attachments: Array.isArray(value.attachments) ? value.attachments.slice(0, 8).map((attachment) => ({
+        name: cleanText(attachment?.name, 120),
+        type: cleanText(attachment?.type, 80),
+        size: Number(attachment?.size) || 0,
+        path: cleanText(attachment?.path, 300),
+        url: typeof attachment?.url === "string" && attachment.url.startsWith("https://") ? attachment.url : "",
+        uploadedAt: validIso(attachment?.uploadedAt),
+      })).filter((attachment) => attachment.name && attachment.url) : [],
+      aiRecommendation: value.aiRecommendation && typeof value.aiRecommendation === "object" ? {
+        priority: PRIORITIES.includes(value.aiRecommendation.priority) ? value.aiRecommendation.priority : priority,
+        summary: cleanText(value.aiRecommendation.summary, 220),
+        confidence: Math.min(1, Math.max(0, Number(value.aiRecommendation.confidence) || 0)),
+        rationale: cleanText(value.aiRecommendation.rationale, 240),
+        guidance: cleanText(value.aiRecommendation.guidance, 240),
+        source: cleanText(value.aiRecommendation.source, 60),
+        model: cleanText(value.aiRecommendation.model, 120),
+        requestId: cleanText(value.aiRecommendation.requestId, 160),
+        generatedAt: validIso(value.aiRecommendation.generatedAt),
+        reviewed: Boolean(value.aiRecommendation.reviewed),
+      } : null,
+      version: Number.isInteger(value.version) ? value.version : 1,
       timestamp: createdAt,
       reportStatus: status === "Resolved" ? "Resolved" : "Pending",
       severity: priorityToSeverity(priority),
@@ -230,3 +268,4 @@
   globalScope.CampusIncidentCore = core;
   if (typeof module !== "undefined" && module.exports) module.exports = core;
 })(typeof window !== "undefined" ? window : globalThis);
+

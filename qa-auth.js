@@ -19,6 +19,8 @@ window.Auth = {
   },
   getSession: () => session,
   getUser: () => session ? { uid: session.uid, email: session.email, name: session.name } : null,
+  getProfile: () => session ? { uid: session.uid, email: session.email, displayName: session.name, role: session.role } : null,
+  getIdToken: async () => "qa-token",
   isReady: () => true,
   async logout() {
     session = null;
@@ -35,3 +37,4 @@ queueMicrotask(() => {
     detail: { ready: true, user: window.Auth.getUser(), error: "" },
   }));
 });
+

@@ -1,71 +1,88 @@
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
-    function signedIn() {
-      return request.auth != null;
-    }
-
-    function isOwnUser(uid) {
-      return signedIn() && request.auth.uid == uid;
-    }
-
-    function hasRole(role) {
-      return signedIn()
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == role;
-    }
-
-    function validRole(role) {
-      return role == null || role in ['student', 'volunteer', 'doctor'];
-    }
+    function signedIn() { return request.auth != null; }
+    function userPath() { return /databases/$(database)/documents/users/$(request.auth.uid); }
+    function hasProfile() { return signedIn() && exists(userPath()); }
+    function role() { return hasProfile() ? get(userPath()).data.role : null; }
+    function hasRole(expected) { return role() == expected && get(userPath()).data.status == 'active'; }
+    function isAdmin() { return hasRole('Administrator'); }
+    function isStudentOwner(report) { return hasRole('Student') && report.submittedByUid == request.auth.uid; }
+    function canReadReport(report) { return isStudentOwner(report) || hasRole('Volunteer') || (hasRole('Doctor') && report.emergencyType == 'Medical') || isAdmin(); }
+    function validRole(value) { return value in ['Student', 'Volunteer', 'Doctor', 'Administrator']; }
+    function validPriority(value) { return value in ['Critical', 'High', 'Medium', 'Low']; }
+    function validStatus(value) { return value in ['Reported', 'Acknowledged', 'Responding', 'Resolved']; }
+    function validHelper(value) { return value in ['Not yet', 'On it', 'Done']; }
 
     match /users/{uid} {
-      allow read: if isOwnUser(uid);
-
-      allow create: if isOwnUser(uid)
-        && request.resource.data.uid == uid
-        && validRole(request.resource.data.role);
-
-      allow update: if isOwnUser(uid)
-        && request.resource.data.uid == resource.data.uid
-        && request.resource.data.createdAt == resource.data.createdAt
-        && validRole(request.resource.data.role)
-        && request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['email', 'displayName', 'photoURL', 'role', 'updatedAt']);
-
+      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow create: if signedIn() && request.auth.uid == uid && request.resource.data.uid == uid && request.resource.data.role == 'Student' && request.resource.data.status == 'active';
+      allow update: if signedIn() && (
+        (request.auth.uid == uid && request.resource.data.uid == resource.data.uid
+          && ((request.resource.data.role == resource.data.role && request.resource.data.status == resource.data.status)
+            || (resource.data.role == 'student' && request.resource.data.role == 'Student' && request.resource.data.status == 'active')
+            || (resource.data.role == 'volunteer' && request.resource.data.role == 'Volunteer' && request.resource.data.status == 'active')
+            || (resource.data.role == 'doctor' && request.resource.data.role == 'Doctor' && request.resource.data.status == 'active')
+            || (validRole(resource.data.role) && resource.data.status == null && request.resource.data.role == resource.data.role && request.resource.data.status == 'active')
+            || (resource.data.role == null && request.resource.data.role == 'Student' && request.resource.data.status == 'active'))
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['email', 'displayName', 'photoURL', 'role', 'status', 'lastSeenAt', 'updatedAt']))
+        ||
+        (isAdmin() && request.resource.data.uid == resource.data.uid && validRole(request.resource.data.role) && request.resource.data.status in ['active', 'suspended']
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role', 'status', 'roleAssignedBy', 'roleAssignedAt', 'updatedAt']))
+      );
       allow delete: if false;
     }
 
     match /reports/{reportId} {
-      allow create: if hasRole('student')
-        && request.resource.data.id == reportId
-        && request.resource.data.submittedBy == request.auth.uid
-        && request.resource.data.reportStatus == 'Pending'
-        && request.resource.data.helperStatus == 'Not yet'
-        && request.resource.data.severity in ['Low', 'Medium', 'High']
-        && request.resource.data.emergencyType in ['Medical', 'Fire', 'Security', 'Accident', 'Other'];
-
-      allow read: if signedIn()
-        && (resource.data.submittedBy == request.auth.uid
-          || hasRole('volunteer')
-          || hasRole('doctor'));
-
+      allow read: if signedIn() && canReadReport(resource.data);
+      allow create: if hasRole('Student') && request.resource.data.id == reportId && request.resource.data.submittedByUid == request.auth.uid
+        && request.resource.data.status == 'Reported' && request.resource.data.reportStatus == 'Pending' && request.resource.data.helperStatus == 'Not yet'
+        && validPriority(request.resource.data.priority) && validPriority(request.resource.data.originalPriority)
+        && request.resource.data.emergencyType in ['Medical', 'Fire', 'Security', 'Accident', 'Other']
+        && request.resource.data.description is string && request.resource.data.description.size() >= 5 && request.resource.data.description.size() <= 300;
       allow update: if signedIn() && (
-        (hasRole('volunteer')
-          && request.resource.data.helperStatus in ['Not yet', 'On it', 'Done']
-          && request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['helperStatus', 'helperUpdatedBy', 'helperUpdatedAt']))
+        (isStudentOwner(resource.data) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['attachments', 'updatedAt', 'updatedAtServer']))
         ||
-        (hasRole('doctor')
-          && resource.data.emergencyType == 'Medical'
-          && resource.data.reportStatus == 'Pending'
-          && request.resource.data.reportStatus == 'Resolved'
-          && request.resource.data.resolvedBy == 'Doctor'
-          && request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['reportStatus', 'resolvedBy', 'resolvedAt']))
+        (hasRole('Volunteer') && validHelper(request.resource.data.helperStatus) && request.resource.data.helperUpdatedByUid == request.auth.uid
+          && ((resource.data.assignedVolunteerUid == null && request.resource.data.assignedVolunteerUid == request.auth.uid)
+            || (resource.data.assignedVolunteerUid == request.auth.uid && (request.resource.data.assignedVolunteerUid == request.auth.uid || request.resource.data.assignedVolunteerUid == null)))
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['assignedVolunteerUid', 'assignedVolunteerName', 'assignedVolunteerEmail', 'assignedAt', 'helperStatus', 'helperUpdatedAt', 'helperUpdatedByUid', 'helperUpdatedByName', 'updatedAt', 'updatedAtServer', 'version']))
+        ||
+        (hasRole('Doctor') && resource.data.emergencyType == 'Medical' && resource.data.status != 'Resolved' && request.resource.data.status == 'Resolved'
+          && request.resource.data.reportStatus == 'Resolved' && request.resource.data.resolvedBy == 'Doctor'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'reportStatus', 'resolvedBy', 'resolvedAt', 'updatedAt', 'updatedAtServer', 'version']))
+        ||
+        (isAdmin() && validPriority(request.resource.data.priority) && validStatus(request.resource.data.status)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['priority', 'priorityOverridden', 'priorityOverrideAt', 'severity', 'status', 'reportStatus', 'acknowledgedAt', 'respondingAt', 'resolvedAt', 'resolvedBy', 'updatedAt', 'updatedAtServer', 'version']))
       );
-
       allow delete: if false;
+
+      match /audit/{eventId} {
+        allow read: if signedIn() && canReadReport(get(/databases/$(database)/documents/reports/$(reportId)).data);
+        allow create: if signedIn() && request.resource.data.actorUid == request.auth.uid && request.resource.data.actorRole == role() && request.resource.data.action is string && request.resource.data.message is string;
+        allow update, delete: if false;
+      }
+      match /notes/{noteId} {
+        allow read: if signedIn() && canReadReport(get(/databases/$(database)/documents/reports/$(reportId)).data);
+        allow create: if signedIn() && role() in ['Volunteer', 'Doctor', 'Administrator'] && request.resource.data.authorUid == request.auth.uid
+          && request.resource.data.authorRole == role() && request.resource.data.note is string && request.resource.data.note.size() >= 3 && request.resource.data.note.size() <= 500;
+        allow update, delete: if false;
+      }
+    }
+
+    match /notificationSubscriptions/{uid} {
+      allow read, create, update: if signedIn() && request.auth.uid == uid;
+      allow delete: if signedIn() && (request.auth.uid == uid || isAdmin());
+    }
+    match /notifications/{notificationId} {
+      allow read, update: if signedIn() && resource.data.recipientUid == request.auth.uid;
+      allow create, delete: if false;
+    }
+    match /systemAudit/{eventId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() && request.resource.data.actorUid == request.auth.uid;
+      allow update, delete: if false;
     }
   }
 }
+

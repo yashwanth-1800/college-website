@@ -1,4 +1,4 @@
-const localQaRole = window.location.hostname === "127.0.0.1"
+const localQaRole = ["127.0.0.1", "localhost"].includes(window.location.hostname)
   ? new URLSearchParams(window.location.search).get("qa-role")
   : null;
 
@@ -7,6 +7,7 @@ async function bootstrapApplication() {
   else await import("./auth.js");
 
   await import("./incident-core.js");
+  await import("./firebase-data.js");
   await import("./script.js");
 }
 
@@ -17,3 +18,4 @@ bootstrapApplication().catch(() => {
     status.className = "status-message error";
   }
 });
+
