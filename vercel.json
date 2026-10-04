@@ -5,7 +5,7 @@
     "api/escalations.js": { "maxDuration": 60 }
   },
   "crons": [
-    { "path": "/api/escalations", "schedule": "0 * * * *" }
+    { "path": "/api/escalations", "schedule": "0 0 * * *" }
   ],
   "rewrites": [
     {

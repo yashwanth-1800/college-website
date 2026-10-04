@@ -11,7 +11,7 @@ A production-oriented campus incident platform for Students, Volunteers, Doctors
 - Atomic volunteer claim/release workflow that prevents conflicting assignments.
 - Helper progress, doctor-only medical resolution, administrator timelines, and priority overrides.
 - Browser notifications plus optional Firebase Cloud Messaging push delivery.
-- Hourly SLA escalation function with priority-specific response targets.
+- SLA escalation function with priority-specific response targets. The included Hobby-compatible Vercel schedule runs daily; use Vercel Pro or an approved external scheduler to call the protected endpoint more frequently.
 - Server-side structured AI recommendations through Vercel AI Gateway. Deterministic safety rules remain the fallback and can raise—not lower—an obvious safety priority.
 - Optional GPS coordinates, a campus operations map, and protected photo/audio/PDF attachments.
 - Firestore multi-tab offline cache with visible online, queued, and synchronized states.
